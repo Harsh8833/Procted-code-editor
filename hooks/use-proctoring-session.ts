@@ -251,22 +251,6 @@ export function useProctoringSession() {
     return finalData
   }, [sessionData])
 
-  // Update session duration periodically while monitoring is active
-  useEffect(() => {
-    if (!isMonitoring || !sessionData?.startTime) return
-
-    const durationUpdateInterval = setInterval(() => {
-      updateSession({
-        sessionStats: {
-          ...sessionData.sessionStats,
-          totalDuration: Date.now() - sessionData.startTime,
-        },
-      })
-    }, 5000) // Update every 5 seconds
-
-    return () => clearInterval(durationUpdateInterval)
-  }, [isMonitoring, sessionData?.startTime, sessionData?.sessionStats, updateSession])
-
   return {
     sessionData,
     monitoringStatus,

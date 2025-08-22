@@ -96,6 +96,10 @@ export function FloatingVideoWidget({
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const audioStreamRef = useRef<MediaStream | null>(null)
+  const audioInitializedRef = useRef<boolean>(false)
+  // Keep references to audio graph nodes so they aren't GC'd
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null)
+  const silentGainRef = useRef<GainNode | null>(null)
   const isCleaningUpRef = useRef<boolean>(false)
   const lastSessionUpdateRef = useRef<number>(0)
   const pendingDetectionDataRef = useRef<any>(null)
@@ -108,6 +112,9 @@ export function FloatingVideoWidget({
   const gazeCooldownRef = useRef<number>(0)
   const lastFaceStateRef = useRef<"none" | "single" | "multiple">("none")
   const consecutiveFramesRef = useRef({ noFace: 0, multipleFaces: 0 })
+  // Event handler refs for cleanup
+  const userInteractionHandlerRef = useRef<((e: any) => void) | null>(null)
+  const visibilityHandlerRef = useRef<(() => void) | null>(null)
 
   const analyzeExpression = useCallback((faceRegion: ImageData, faceDetection: FaceDetection): ExpressionAnalysis => {
     const data = faceRegion.data
@@ -659,198 +666,329 @@ export function FloatingVideoWidget({
 
   const initializeAudioAnalysis = useCallback(async (audioStream?: MediaStream) => {
     try {
-      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-        console.log("[v0] AudioContext already initialized")
+      if (audioInitializedRef.current) {
+        console.log("[v0] 🎵 Audio analysis already initialized, skipping")
         return
       }
 
-      let stream = audioStream
+      console.log("[v0] 🎵 Starting audio analysis initialization...")
+
+      // Check precheck initialization status
+      const precheckInitialized = sessionStorage.getItem('audio-context-initialized')
+      const precheckError = sessionStorage.getItem('audio-init-error')
+      const precheckState = sessionStorage.getItem('audio-context-state')
+      const streamAvailable = sessionStorage.getItem('audio-stream-available')
       
-      // If no audio stream provided, request one
-      if (!stream) {
-        let audioRetries = 0
-        const maxAudioRetries = 3
+      console.log("[v0] 🎵 Precheck audio status:", {
+        initialized: precheckInitialized,
+        error: precheckError,
+        state: precheckState,
+        streamAvailable: streamAvailable
+      })
+
+      let stream = audioStream
+
+      // Try to use the stream from precheck first
+      if (!stream && typeof window !== 'undefined' && (window as any).precheckAudioStream) {
+        const precheckStream = (window as any).precheckAudioStream as MediaStream
+        console.log("[v0] 🎵 Found preserved stream from precheck:", {
+          active: precheckStream.active,
+          tracks: precheckStream.getTracks().length,
+          trackStates: precheckStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState }))
+        })
         
-        while (audioRetries < maxAudioRetries && !stream) {
-          try {
-            console.log(`[v0] Requesting audio stream (attempt ${audioRetries + 1}/${maxAudioRetries})`)
-            
-            stream = await navigator.mediaDevices.getUserMedia({ 
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                sampleRate: 44100
-              }
-            })
-            
-            // Store the audio stream reference
-            audioStreamRef.current = stream
-            break
-          } catch (audioError) {
-            audioRetries++
-            console.error(`[v0] Audio stream request attempt ${audioRetries} failed:`, audioError)
-            
-            if (audioError instanceof DOMException) {
-              if (audioError.name === 'NotAllowedError') {
-                console.error("[v0] Microphone permission denied")
-              } else if (audioError.name === 'NotFoundError') {
-                console.error("[v0] Microphone not found")
-              } else if (audioError.name === 'NotReadableError') {
-                console.error("[v0] Microphone already in use")
-              }
-            }
-            
-            if (audioRetries >= maxAudioRetries) {
-              throw new Error(`Failed to get audio stream after ${maxAudioRetries} attempts`)
-            }
-            
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 1000))
-          }
+        if (precheckStream.active && precheckStream.getTracks().length > 0) {
+          stream = precheckStream
+          console.log("[v0] 🎵 Using preserved audio stream from precheck")
+          audioStreamRef.current = precheckStream
+        } else {
+          console.warn("[v0] 🎵 ⚠️ Preserved stream is inactive or has no tracks, will request new one")
         }
-      } else {
-        // Store the provided audio stream
-        audioStreamRef.current = stream
+      }
+
+      // If no audio stream from precheck, request one with enhanced debugging
+      if (!stream) {
+        try {
+          console.log("[v0] 🎵 No preserved stream found, requesting new audio stream")
+          console.time("[v0] 🎵 Audio stream request time")
+          
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              sampleRate: 44100,
+            },
+          })
+          
+          console.timeEnd("[v0] 🎵 Audio stream request time")
+          console.log("[v0] 🎵 New audio stream obtained:", {
+            tracks: stream.getTracks().length,
+            active: stream.active,
+            id: stream.id
+          })
+          
+          audioStreamRef.current = stream
+        } catch (audioError) {
+          console.error("[v0] 🎵 ❌ Audio stream request failed:", audioError)
+          if (audioError instanceof DOMException) {
+            console.error("[v0] 🎵 ❌ Error type:", audioError.name, "Message:", audioError.message)
+          }
+          throw new Error("Failed to get audio stream: " + (audioError instanceof Error ? audioError.message : String(audioError)))
+        }
       }
       
       if (!stream) {
         throw new Error("No audio stream available for analysis")
       }
 
-      console.log("[v0] Initializing audio analysis with stream")
-      audioContextRef.current = new AudioContext()
+      console.log("[v0] 🎵 Initializing audio analysis with stream")
+      console.time("[v0] 🎵 AudioContext creation time")
       
-      // Resume audio context if suspended (some browsers require this)
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume()
-        console.log("[v0] AudioContext resumed from suspended state")
+      // Create AudioContext (handle vendor prefixed if needed)
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioContextClass) {
+        throw new Error("AudioContext not supported")
       }
       
-      const source = audioContextRef.current.createMediaStreamSource(stream)
-      analyserRef.current = audioContextRef.current.createAnalyser()
-      analyserRef.current.fftSize = 256
-      analyserRef.current.smoothingTimeConstant = 0.8
-      source.connect(analyserRef.current)
+      audioContextRef.current = new AudioContextClass()
+      console.timeEnd("[v0] 🎵 AudioContext creation time")
+      
+      console.log("[v0] 🎵 AudioContext created:", {
+        state: audioContextRef.current.state,
+        sampleRate: audioContextRef.current.sampleRate,
+        baseLatency: audioContextRef.current.baseLatency
+      })
 
-      console.log("[v0] AudioContext initialized successfully with state:", audioContextRef.current.state)
+      if (audioContextRef.current.state === 'suspended') {
+        try {
+          console.log("[v0] 🎵 AudioContext suspended, attempting resume...")
+          console.time("[v0] 🎵 AudioContext resume time")
+          
+          const resumePromise = audioContextRef.current.resume()
+          const resumeTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('AudioContext resume timeout')), 3000)
+          )
+          
+          await Promise.race([resumePromise, resumeTimeout])
+          console.timeEnd("[v0] 🎵 AudioContext resume time")
+          console.log('[v0] 🎵 ✅ AudioContext resumed, new state:', audioContextRef.current.state)
+        } catch (resumeErr) {
+          console.warn('[v0] 🎵 ⚠️ AudioContext resume failed or timed out:', resumeErr)
+          console.log('[v0] 🎵 Continuing with suspended context (will attempt to start on user interaction)')
+        }
+      }
+      
+      console.log("[v0] 🎵 Creating audio analysis nodes...")
+  const ctx = audioContextRef.current
+  const source = ctx.createMediaStreamSource(stream)
+  const analyser = ctx.createAnalyser()
+  analyser.fftSize = 1024
+  analyser.smoothingTimeConstant = 0.85
+
+  // Some browsers optimize away disconnected graphs; keep a silent sink
+  const silentGain = ctx.createGain()
+  silentGain.gain.value = 0
+
+  source.connect(analyser)
+  analyser.connect(silentGain)
+  silentGain.connect(ctx.destination)
+
+  // Save refs for reuse/cleanup
+  sourceNodeRef.current = source
+  analyserRef.current = analyser
+  silentGainRef.current = silentGain
+
+      console.log("[v0] 🎵 Audio nodes connected successfully")
+      console.log("[v0] 🎵 Analyser settings:", {
+        fftSize: analyserRef.current.fftSize,
+        frequencyBinCount: analyserRef.current.frequencyBinCount,
+        smoothingTimeConstant: analyserRef.current.smoothingTimeConstant
+      })
+
+      console.log("[v0] 🎵 ✅ AudioContext setup completed with state:", audioContextRef.current.state)
+
+      // Test initial audio levels
+      console.log("[v0] 🎵 Testing initial audio analysis...")
+      const testArray = new Uint8Array(analyserRef.current.fftSize)
+      analyserRef.current.getByteTimeDomainData(testArray)
+      const rms0 = Math.sqrt(
+        Array.from(testArray).reduce((acc, v) => {
+          const norm = (v - 128) / 128
+          return acc + norm * norm
+        }, 0) / testArray.length,
+      )
+      console.log("[v0] 🎵 Initial audio RMS:", Math.round(rms0 * 1000) / 10, "%")
 
       const updateAudioLevel = () => {
-        if (analyserRef.current && audioContextRef.current?.state === "running") {
-          const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
-          analyserRef.current.getByteFrequencyData(dataArray)
-          const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length
-          const currentLevel = Math.round((average / 255) * 100)
-          
-          // Update the state to trigger re-renders
-          setAudioLevel(currentLevel)
+        try {
+          if (analyserRef.current && audioContextRef.current?.state === 'running') {
+            const analyser = analyserRef.current
+            const dataArray = new Uint8Array(analyser.fftSize)
+            analyser.getByteTimeDomainData(dataArray)
+            // Compute RMS around 128 center
+            let sumSquares = 0
+            for (let i = 0; i < dataArray.length; i++) {
+              const norm = (dataArray[i] - 128) / 128
+              sumSquares += norm * norm
+            }
+            const rms = Math.sqrt(sumSquares / dataArray.length)
+            // Convert RMS (~0..1) to a 0..100 display that is not too jumpy
+            const currentLevel = Math.min(100, Math.round(rms * 140 * 100) / 100) // scale factor ~1.4
 
-          const faceDetected = faceCount > 0
-          const hasAnomaly = analyzeAudioAnomalies(currentLevel, faceDetected)
+            // Update the state to trigger re-renders
+            setAudioLevel(currentLevel)
 
-          lastAudioLevelRef.current = currentLevel
-          
-          // Debug logging every 2 seconds for better feedback
-          if (Date.now() % 2000 < 50) {
-            console.log(`[v0] Audio Debug: Level=${currentLevel}%, Faces=${faceCount}, Anomalies=${audioAnomalyCountRef.current}`)
+            const faceDetected = faceCount > 0
+            analyzeAudioAnomalies(currentLevel, faceDetected)
+
+            lastAudioLevelRef.current = currentLevel
+
+            // Enhanced debug logging
+            if (Date.now() % 3000 < 50) {
+              console.log(`[v0] 🎵 Audio Live: Level=${currentLevel}%, Context=${audioContextRef.current?.state}, Faces=${faceCount}, Anomalies=${audioAnomalyCountRef.current}`)
+            }
+          } else {
+            // Check why audio is not running and log detailed status
+            if (Date.now() % 5000 < 50) {
+              const status = {
+                hasAnalyser: !!analyserRef.current,
+                hasContext: !!audioContextRef.current,
+                contextState: audioContextRef.current?.state || 'none',
+                streamActive: audioStreamRef.current?.active || false,
+                streamTracks: audioStreamRef.current?.getTracks().length || 0
+              }
+              console.log('[v0] 🎵 ⚠️ Audio not running, status:', status)
+              
+              // Try to resume if suspended
+              if (audioContextRef.current?.state === 'suspended') {
+                console.log('[v0] 🎵 Attempting to resume suspended AudioContext...')
+                audioContextRef.current.resume().catch(err => 
+                  console.warn('[v0] 🎵 Resume failed:', err)
+                )
+              }
+            }
           }
-        } else {
-          console.log("[v0] Audio analysis not running - analyser or context unavailable")
-        }
-        
-        if (!isCleaningUpRef.current) {
-          requestAnimationFrame(updateAudioLevel)
+        } catch (err) {
+          console.error('[v0] 🎵 ❌ Audio update error:', err)
+        } finally {
+          if (!isCleaningUpRef.current) {
+            requestAnimationFrame(updateAudioLevel)
+          }
         }
       }
+
+      // Mark initialized and start monitoring loop
+      audioInitializedRef.current = true
       updateAudioLevel()
-      console.log("[v0] Audio level monitoring started")
+      console.log('[v0] 🎵 ✅ Audio level monitoring started successfully')
+      
+      // Add handlers to resume suspended audio context
+      const handleUserInteraction = () => {
+        if (audioContextRef.current?.state === 'suspended') {
+          console.log('[v0] 🎵 User interaction detected, resuming AudioContext...')
+          audioContextRef.current.resume().then(() => {
+            console.log('[v0] 🎵 ✅ AudioContext resumed via user interaction')
+            if (userInteractionHandlerRef.current) {
+              document.removeEventListener('click', userInteractionHandlerRef.current)
+              document.removeEventListener('keydown', userInteractionHandlerRef.current)
+              userInteractionHandlerRef.current = null
+            }
+          }).catch(err => {
+            console.warn('[v0] 🎵 ⚠️ Failed to resume AudioContext on user interaction:', err)
+          })
+        }
+      }
+      
+      const handleVisibility = () => {
+        if (!document.hidden && audioContextRef.current?.state === 'suspended') {
+          audioContextRef.current.resume().catch(() => {})
+        }
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        console.log('[v0] 🎵 AudioContext is suspended, adding listeners for resume')
+        userInteractionHandlerRef.current = handleUserInteraction
+        visibilityHandlerRef.current = handleVisibility
+        document.addEventListener('click', handleUserInteraction)
+        document.addEventListener('keydown', handleUserInteraction)
+        document.addEventListener('visibilitychange', handleVisibility)
+      }
       
     } catch (error) {
-      console.error("[v0] Failed to initialize audio analysis:", error)
-      // Set a default audio level to show the meter is trying to work
+  console.error('[v0] 🎵 ❌ Failed to initialize audio analysis:', error)
+      sessionStorage.setItem('audio-widget-error', error instanceof Error ? error.message : String(error))
       setAudioLevel(0)
+      audioInitializedRef.current = false
     }
   }, [analyzeAudioAnomalies, faceCount])
 
   useEffect(() => {
     const initVideo = async () => {
-      let retries = 0
-      const maxRetries = 3
-      
-      const attemptInitialization = async (): Promise<boolean> => {
-        try {
-          console.log(`[v0] Attempting video initialization (attempt ${retries + 1}/${maxRetries})`)
-          
-          // Request camera and microphone permissions with specific constraints
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { 
-              width: { ideal: 320 },
-              height: { ideal: 240 },
-              frameRate: { ideal: 15 }
-            },
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true
-            },
-          })
-          
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream
-            console.log("[v0] Video stream connected successfully")
-          }
-
-          // Extract audio tracks from the main stream
-          const audioTracks = stream.getAudioTracks()
-          let audioStream: MediaStream | null = null
-          
-          if (audioTracks.length > 0) {
-            // Create a new MediaStream with just the audio tracks
-            audioStream = new MediaStream(audioTracks)
-            console.log("[v0] Audio stream extracted from main stream")
-          }
-
-          await initializeFaceDetection()
-          
-          // Pass the audio stream to avoid requesting permissions again
-          await initializeAudioAnalysis(audioStream || undefined)
-
-          animationRef.current = requestAnimationFrame(detectFaces)
-          console.log("[v0] Video widget initialized successfully")
-          return true
-        } catch (error) {
-          console.error(`[v0] Video initialization attempt ${retries + 1} failed:`, error)
-          
-          // Handle specific permission errors
-          if (error instanceof DOMException) {
-            if (error.name === 'NotAllowedError') {
-              console.error("[v0] Permissions denied for camera/microphone")
-            } else if (error.name === 'NotFoundError') {
-              console.error("[v0] Camera or microphone not found")
-            } else if (error.name === 'NotReadableError') {
-              console.error("[v0] Camera or microphone already in use")
-            }
-          }
-          
-          return false
-        }
-      }
-
-      // Retry logic
-      while (retries < maxRetries) {
-        const success = await attemptInitialization()
-        if (success) {
-          break
-        }
+      try {
+        console.log("[v0] Quick video initialization (permissions should already be granted)")
         
-        retries++
-        if (retries < maxRetries) {
-          console.log(`[v0] Retrying in 2 seconds... (attempt ${retries + 1}/${maxRetries})`)
-          await new Promise(resolve => setTimeout(resolve, 2000))
-        } else {
-          console.error("[v0] Failed to initialize video widget after all retries")
-          // You might want to show an error state to the user here
+        // Check if we have a preserved audio stream from precheck
+        const precheckAudioStream = typeof window !== 'undefined' ? (window as any).precheckAudioStream : null
+        console.log("[v0] 🎵 Checking for preserved audio stream:", {
+          hasWindow: typeof window !== 'undefined',
+          hasPrecheckStream: !!precheckAudioStream,
+          streamActive: precheckAudioStream?.active,
+          streamTracks: precheckAudioStream?.getTracks().length
+        })
+        
+        // Since permissions were granted in precheck, this should be fast
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            width: { ideal: 320 },
+            height: { ideal: 240 },
+            frameRate: { ideal: 15 }
+          },
+          audio: {  // Always request audio for now to debug the issue
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+        })
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          console.log("[v0] Video stream connected successfully")
         }
+
+        // Use preserved audio stream from precheck or extract from current stream
+        let audioStream: MediaStream | null = null
+        
+        // Always extract from current stream for now to debug
+        const audioTracks = stream.getAudioTracks()
+        if (audioTracks.length > 0) {
+          audioStream = new MediaStream(audioTracks)
+          console.log("[v0] 🎵 Audio stream extracted from main stream:", {
+            tracks: audioTracks.length,
+            active: audioStream.active,
+            id: audioStream.id,
+            trackStates: audioTracks.map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState }))
+          })
+        } else {
+          console.warn("[v0] 🎵 ⚠️ No audio tracks found in stream!")
+        }
+
+        // Initialize components (should be faster since precheck prepared them)
+        await initializeFaceDetection()
+        
+        if (audioStream) {
+          console.log("[v0] 🎵 Initializing audio analysis with stream...")
+          await initializeAudioAnalysis(audioStream)
+        } else {
+          console.error("[v0] 🎵 ❌ No audio stream available for analysis!")
+        }
+
+        animationRef.current = requestAnimationFrame(detectFaces)
+        console.log("[v0] Video widget initialized successfully")
+        
+      } catch (error) {
+        console.error("[v0] Video initialization failed:", error)
+        // Show error state to user
+        onStatusChange?.("violation")
       }
     }
 
@@ -881,6 +1019,28 @@ export function FloatingVideoWidget({
           console.warn("[v0] AudioContext close error (safe to ignore):", error)
         }
       }
+      // Disconnect nodes and remove listeners
+      try {
+        sourceNodeRef.current?.disconnect()
+        silentGainRef.current?.disconnect()
+      } catch {}
+      if (userInteractionHandlerRef.current) {
+        document.removeEventListener('click', userInteractionHandlerRef.current)
+        document.removeEventListener('keydown', userInteractionHandlerRef.current)
+        userInteractionHandlerRef.current = null
+      }
+      if (visibilityHandlerRef.current) {
+        document.removeEventListener('visibilitychange', visibilityHandlerRef.current)
+        visibilityHandlerRef.current = null
+      }
+
+      // Reset audio initialized flag and clear refs
+      audioInitializedRef.current = false
+      analyserRef.current = null
+      sourceNodeRef.current = null
+      silentGainRef.current = null
+      audioStreamRef.current = null
+      audioContextRef.current = null
     }
   }, []) // Empty dependency array to prevent reinitialization
 

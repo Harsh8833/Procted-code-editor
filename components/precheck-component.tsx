@@ -37,40 +37,55 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
     const checkResults: Partial<PreCheckResults> = {}
 
     try {
-      // Step 1: Camera Access - ensure user gesture triggered permission
+      // Step 1: Camera Access with proper initialization
       setCurrentStep(0)
       setProgress(20)
       console.log("[v0] Checking camera access...")
 
       try {
-        // Request camera permission - this should trigger permission dialog
-        const cameraStream = await navigator.mediaDevices.getUserMedia({
+        // Request camera permission with timeout to avoid hanging
+        const cameraTimeout = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error("Camera access timeout")), 8000)
+        )
+        
+        const cameraPromise = navigator.mediaDevices.getUserMedia({
           video: { 
             width: { ideal: 640 }, 
             height: { ideal: 480 },
             frameRate: { ideal: 15 }
           },
         })
+        
+        const cameraStream = await Promise.race([cameraPromise, cameraTimeout])
         checkResults.cameraAccess = true
         console.log("[v0] Camera access granted")
 
-        // Step 2: Microphone Access
+        // Step 2: Microphone Access with timeout
         setCurrentStep(1)
         setProgress(40)
         console.log("[v0] Checking microphone access...")
 
-        // Request microphone permission - this should trigger permission dialog
-        const audioStream = await navigator.mediaDevices.getUserMedia({ 
+        const audioTimeout = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error("Audio access timeout")), 5000)
+        )
+        
+        const audioPromise = navigator.mediaDevices.getUserMedia({ 
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true
           }
         })
+        
+        const audioStream = await Promise.race([audioPromise, audioTimeout])
         checkResults.microphoneAccess = true
         console.log("[v0] Microphone access granted")
 
-        // Step 3: Face Detection Verification
+        // Step 3: Initialize Audio Analysis (prepare for later use)
+        console.log("[v0] Initializing audio analysis...")
+        await initializeAudioContext(audioStream)
+
+        // Step 4: Face Detection Verification
         setCurrentStep(2)
         setProgress(60)
         console.log("[v0] Verifying face detection...")
@@ -78,7 +93,11 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
         const faceDetectionResult = await verifyFaceDetection(cameraStream)
         checkResults.faceDetection = faceDetectionResult
 
-        // Cleanup streams
+        // Step 5: Initialize Face Detection Model (prepare for later use)
+        console.log("[v0] Initializing face detection model...")
+        await initializeFaceDetectionModel()
+
+        // Cleanup streams but keep the permissions granted
         cameraStream.getTracks().forEach((track) => track.stop())
         audioStream.getTracks().forEach((track) => track.stop())
 
@@ -204,6 +223,100 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
     }
   }, [retryPreChecks])
 
+  // Initialize audio context for later use
+  const initializeAudioContext = async (audioStream: MediaStream): Promise<void> => {
+    try {
+      console.log("[v0] 🎵 Starting audio analysis setup...")
+      console.log("[v0] 🎵 Audio stream tracks:", audioStream.getTracks().length)
+      console.log("[v0] 🎵 Audio stream active:", audioStream.active)
+      
+      // Check if AudioContext is supported
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioContextClass) {
+        throw new Error("AudioContext not supported in this browser")
+      }
+      
+      const audioContext = new AudioContextClass()
+      console.log("[v0] 🎵 AudioContext created, initial state:", audioContext.state)
+      
+      if (audioContext.state === 'suspended') {
+        console.log("[v0] 🎵 AudioContext suspended, attempting to resume...")
+        await audioContext.resume()
+        console.log("[v0] 🎵 AudioContext resumed, new state:", audioContext.state)
+      }
+      
+      // Create audio analysis nodes
+      const source = audioContext.createMediaStreamSource(audioStream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.8
+      source.connect(analyser)
+      
+      console.log("[v0] 🎵 Audio analysis nodes created and connected")
+      
+      // Test audio analysis with a quick sample
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      analyser.getByteFrequencyData(dataArray)
+      const testLevel = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length
+      console.log("[v0] 🎵 Test audio level:", Math.round((testLevel / 255) * 100) + "%")
+      
+      // Store initialization success flags and stream reference
+      sessionStorage.setItem('audio-context-initialized', 'true')
+      sessionStorage.setItem('audio-context-state', audioContext.state)
+      sessionStorage.setItem('audio-sample-rate', audioContext.sampleRate.toString())
+      sessionStorage.setItem('audio-stream-available', 'true')
+      
+      console.log("[v0] 🎵 Audio context setup completed successfully")
+      console.log("[v0] 🎵 Sample rate:", audioContext.sampleRate)
+      console.log("[v0] 🎵 Base latency:", audioContext.baseLatency)
+      
+      // Store the audio stream globally for the floating widget to use
+      if (typeof window !== 'undefined') {
+        (window as any).precheckAudioStream = audioStream
+        console.log("[v0] 🎵 Audio stream stored globally for main app")
+      }
+      
+      // Clean up test context but preserve the stream
+      source.disconnect()
+      audioContext.close()
+      console.log("[v0] 🎵 Test audio context cleaned up, stream preserved")
+      
+    } catch (error) {
+      console.error("[v0] 🎵 ❌ Audio context initialization failed:", error)
+      sessionStorage.setItem('audio-context-initialized', 'false')
+      sessionStorage.setItem('audio-init-error', error instanceof Error ? error.message : String(error))
+      // Don't fail precheck for audio issues, but log the problem
+    }
+  }
+
+  // Initialize face detection model for later use
+  const initializeFaceDetectionModel = async (): Promise<void> => {
+    try {
+      console.log("[v0] Loading face detection model...")
+      
+      // Check if Face Detection API is available
+      if ('FaceDetector' in window) {
+        const faceDetector = new (window as any).FaceDetector({
+          maxDetectedFaces: 5,
+          fastMode: true
+        })
+        
+        // Store availability flag
+        sessionStorage.setItem('face-detector-available', 'true')
+        console.log("[v0] Native FaceDetector API available")
+      } else {
+        console.log("[v0] Native FaceDetector not available, will use fallback")
+        sessionStorage.setItem('face-detector-available', 'false')
+      }
+      
+      console.log("[v0] Face detection model ready")
+    } catch (error) {
+      console.warn("[v0] Face detection model initialization failed:", error)
+      sessionStorage.setItem('face-detector-available', 'false')
+      // Don't fail precheck for face detection issues
+    }
+  }
+
   const verifyFaceDetection = async (
     stream: MediaStream,
   ): Promise<{ status: boolean; confidence: number; timestamp: number }> => {
@@ -265,42 +378,34 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
         }
       }
 
-      // Method 2: Try screen capture permission as a way to detect screens
+      // Method 2: Try Window Management API for better screen detection
       try {
-        console.log("[v0] Attempting screen capture for screen detection...")
+        console.log("[v0] Attempting Window Management API for screen detection...")
         
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({ 
-          video: true,
-          audio: false
-        })
-        
-        if (displayStream) {
-          const videoTrack = displayStream.getVideoTracks()[0]
-          const settings = videoTrack.getSettings()
-          
-          // Stop the stream immediately
-          displayStream.getTracks().forEach(track => track.stop())
-          
-          // Analyze screen dimensions
-          const screenWidth = window.screen.width
-          const screenHeight = window.screen.height
-          
-          if (settings.width && settings.height) {
-            const captureArea = settings.width * settings.height
-            const screenArea = screenWidth * screenHeight
+        // Request window management permission which gives access to screen info
+        if ('getScreenDetails' in window || navigator.permissions) {
+          try {
+            // Try to request window-management permission explicitly
+            const permission = await navigator.permissions.query({ name: 'window-management' as any })
+            console.log("[v0] Window management permission state:", permission.state)
             
-            // If capture area is significantly larger than screen, likely multiple monitors
-            if (captureArea > screenArea * 1.3) {
-              console.log("[v0] Multiple monitors detected via screen capture analysis")
-              return 2
+            if (permission.state === 'granted') {
+              // If we have permission, try to get screen details
+              if ('getScreenDetails' in window) {
+                const screenDetails = await (window as any).getScreenDetails()
+                console.log("[v0] Window management enabled, screens found:", screenDetails.screens.length)
+                return screenDetails.screens.length
+              }
+            } else if (permission.state === 'prompt') {
+              console.log("[v0] Window management permission requires user interaction")
+              // The permission will be requested when the user interacts with the app
             }
+          } catch (permissionError) {
+            console.warn("[v0] Window management permission check failed:", permissionError)
           }
-          
-          console.log("[v0] Single monitor detected via screen capture")
-          return 1
         }
-      } catch (displayError) {
-        console.log("[v0] Screen capture permission denied or failed:", displayError)
+      } catch (managementError) {
+        console.log("[v0] Window Management API not available:", managementError)
         // Continue to fallback
       }
 
