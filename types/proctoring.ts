@@ -107,6 +107,9 @@ export interface SessionData {
     image: string
     context: string
   }>
+  // Latest analyses captured from the video widget
+  postureAnalysis?: PostureAnalysis
+  attireAnalysis?: AttireAnalysis
   sessionStats: {
     totalDuration: number
     questionsAttempted: number
@@ -116,6 +119,13 @@ export interface SessionData {
     gazeDuration: number
     focusBreaks: number
     codeExecutionCount: number
+    // New counters
+    noFaceIncidents: number
+    multipleFaceIncidents: number
+    unfocusEvents: number
+    gazeOffScreenIncidents: number
+    keystrokes: number
+    copyCutPasteAttempts: number
   }
 }
 

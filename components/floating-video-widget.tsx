@@ -48,6 +48,7 @@ interface FloatingVideoWidgetProps {
   sessionData?: SessionData
   onStatusChange?: (status: MonitoringStatus) => void
   onUpdateSession?: (updates: Partial<SessionData>) => void
+  onAddEvent?: (event: any) => void
 }
 
 export function FloatingVideoWidget({
@@ -55,6 +56,7 @@ export function FloatingVideoWidget({
   sessionData,
   onStatusChange,
   onUpdateSession,
+  onAddEvent,
 }: FloatingVideoWidgetProps) {
   const [isMinimized, setIsMinimized] = useState(false)
   const [position, setPosition] = useState({ x: window.innerWidth - 280, y: window.innerHeight - 400 })
@@ -97,9 +99,6 @@ export function FloatingVideoWidget({
   const analyserRef = useRef<AnalyserNode | null>(null)
   const audioStreamRef = useRef<MediaStream | null>(null)
   const audioInitializedRef = useRef<boolean>(false)
-  // Keep references to audio graph nodes so they aren't GC'd
-  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null)
-  const silentGainRef = useRef<GainNode | null>(null)
   const isCleaningUpRef = useRef<boolean>(false)
   const lastSessionUpdateRef = useRef<number>(0)
   const pendingDetectionDataRef = useRef<any>(null)
@@ -112,9 +111,7 @@ export function FloatingVideoWidget({
   const gazeCooldownRef = useRef<number>(0)
   const lastFaceStateRef = useRef<"none" | "single" | "multiple">("none")
   const consecutiveFramesRef = useRef({ noFace: 0, multipleFaces: 0 })
-  // Event handler refs for cleanup
-  const userInteractionHandlerRef = useRef<((e: any) => void) | null>(null)
-  const visibilityHandlerRef = useRef<(() => void) | null>(null)
+  const incidentRef = useRef({ noFace: false, multipleFaces: false, gazeOff: false })
 
   const analyzeExpression = useCallback((faceRegion: ImageData, faceDetection: FaceDetection): ExpressionAnalysis => {
     const data = faceRegion.data
@@ -302,6 +299,13 @@ export function FloatingVideoWidget({
         level: currentLevel,
         faceDetected: faceDetected
       })
+      // fire event
+      onAddEvent?.({
+        eventType: "audio_anomaly",
+        severity: "warning" as const,
+        context: "coding",
+        data: { level: currentLevel, faceDetected },
+      })
       return true
     }
 
@@ -315,6 +319,12 @@ export function FloatingVideoWidget({
         setAudioAnomalyCount(audioAnomalyCountRef.current)
         silenceStartRef.current = null // Reset to avoid multiple counts
         console.log("[v0] Audio anomaly: Extended silence while face detected (lip sync issue)")
+        onAddEvent?.({
+          eventType: "audio_anomaly",
+          severity: "warning" as const,
+          context: "coding",
+          data: { level: currentLevel, reason: "extended_silence_with_face" },
+        })
         return true
       }
     } else if (currentLevel >= 5) {
@@ -330,6 +340,12 @@ export function FloatingVideoWidget({
       setAudioAnomalyCount(audioAnomalyCountRef.current)
       audioWithoutFaceCooldownRef.current = now
       console.log("[v0] Audio anomaly: Audio detected without face visible")
+      onAddEvent?.({
+        eventType: "audio_anomaly",
+        severity: "warning" as const,
+        context: "coding",
+        data: { level: currentLevel, reason: "audio_without_face" },
+      })
       return true
     }
 
@@ -389,6 +405,15 @@ export function FloatingVideoWidget({
           setMultipleFacesDetectionCount((prev) => prev + 1)
           consecutiveFramesRef.current.multipleFaces = 1
           console.log("[v0] Multiple faces detected - incident started")
+          if (!incidentRef.current.multipleFaces) {
+            incidentRef.current.multipleFaces = true
+            onAddEvent?.({
+              eventType: "face_detection",
+              severity: "warning" as const,
+              context: "coding",
+              data: { reason: "multiple_faces", count: faces.length },
+            })
+          }
         } else {
           // Continuing multiple faces state
           consecutiveFramesRef.current.multipleFaces += 1
@@ -402,6 +427,7 @@ export function FloatingVideoWidget({
           console.log(`[v0] Multiple faces ended - duration: ${duration}ms`)
         }
         consecutiveFramesRef.current.multipleFaces = 0
+        incidentRef.current.multipleFaces = false
       }
 
       // Handle no face detection with proper state tracking
@@ -412,6 +438,15 @@ export function FloatingVideoWidget({
           setNoFaceDetectionCount((prev) => prev + 1)
           consecutiveFramesRef.current.noFace = 1
           console.log("[v0] No face detected - incident started")
+          if (!incidentRef.current.noFace) {
+            incidentRef.current.noFace = true
+            onAddEvent?.({
+              eventType: "face_detection",
+              severity: "critical" as const,
+              context: "coding",
+              data: { reason: "no_face" },
+            })
+          }
         } else {
           // Continuing no face state
           consecutiveFramesRef.current.noFace += 1
@@ -425,6 +460,7 @@ export function FloatingVideoWidget({
           console.log(`[v0] No face ended - duration: ${duration}ms`)
         }
         consecutiveFramesRef.current.noFace = 0
+        incidentRef.current.noFace = false
       }
 
       // Update last face state
@@ -498,6 +534,15 @@ export function FloatingVideoWidget({
             setGazeOffScreenStartTime(currentTime)
             gazeCooldownRef.current = Date.now()
             console.log("[v0] Gaze off-screen detected")
+            if (!incidentRef.current.gazeOff) {
+              incidentRef.current.gazeOff = true
+              onAddEvent?.({
+                eventType: "gaze_tracking",
+                severity: "warning" as const,
+                context: "coding",
+                data: { offscreen: true },
+              })
+            }
           } else if (!isOffScreen && isLookingOffScreen) {
             if (gazeOffScreenStartTime !== null) {
               const duration = currentTime - gazeOffScreenStartTime
@@ -505,6 +550,7 @@ export function FloatingVideoWidget({
               setGazeOffScreenStartTime(null)
             }
             setIsLookingOffScreen(false)
+            incidentRef.current.gazeOff = false
           }
 
           detectionSnapshot.postureAnalysis = {
@@ -550,7 +596,7 @@ export function FloatingVideoWidget({
 
       const hasViolation = faces.length === 0 || faces.length > 1
 
-      if (onUpdateSession && (hasViolation || currentTime - lastSessionUpdateRef.current >= 5000)) {
+  if (onUpdateSession && (hasViolation || currentTime - lastSessionUpdateRef.current >= 5000)) {
         const currentSnapshots = sessionData?.snapshots || []
         
         // Only add a proper snapshot when there's a violation, not for regular analysis
@@ -569,50 +615,14 @@ export function FloatingVideoWidget({
           }
         }
 
-        const currentStats = sessionData?.sessionStats || {
-          totalDuration: 0,
-          questionsAttempted: 0,
-          violationCount: 0,
-          tabSwitches: 0,
-          audioAnomalies: 0,
-          gazeDuration: 0,
-          focusBreaks: 0,
-          codeExecutionCount: 0,
-        }
-
-        const updatedSessionData = {
+        onUpdateSession({
           snapshots: updatedSnapshots,
-          sessionStats: {
-            ...currentStats,
-            // Don't update totalDuration from floating widget - let session hook handle it
-            questionsAttempted: currentStats.questionsAttempted,
-            violationCount: currentStats.violationCount + (hasViolation ? 1 : 0),
-            tabSwitches: Math.max(currentStats.tabSwitches, tabSwitchCount),
-            audioAnomalies: Math.max(currentStats.audioAnomalies, audioAnomalyCountRef.current),
-            gazeDuration: currentStats.gazeDuration + (eyeContactAnalysis?.isLookingAtCamera ? 100 : 0),
-            focusBreaks: Math.max(currentStats.focusBreaks, unfocusCount + gazeOffScreenCount + noFaceDetectionCount + multipleFacesDetectionCount),
-            codeExecutionCount: currentStats.codeExecutionCount,
-          },
-        }
-
-        console.log("[v0] Floating widget stats before update:", {
-          tabSwitches: currentStats.tabSwitches,
-          newTabSwitches: tabSwitchCount,
-          audioAnomalies: currentStats.audioAnomalies,
-          newAudioAnomalies: audioAnomalyCountRef.current,
-          focusBreaks: currentStats.focusBreaks,
-          unfocusCount,
-          gazeOffScreenCount,
-          noFaceDetectionCount,
-          multipleFacesDetectionCount
+          postureAnalysis: postureAnalysis || undefined,
+          attireAnalysis: attireAnalysis || undefined,
         })
 
-        console.log("[v0] Updating session from floating widget:", updatedSessionData)
-
-        onUpdateSession(updatedSessionData)
-
         lastSessionUpdateRef.current = currentTime
-        console.log("[v0] Session updated (immediate):", hasViolation ? "violation detected" : "5-second interval")
+        console.log("[v0] Session snapshots updated (immediate):", hasViolation ? "violation detected" : "5-second interval")
       }
 
       if (faces.length === 0) {
@@ -780,24 +790,11 @@ export function FloatingVideoWidget({
       }
       
       console.log("[v0] 🎵 Creating audio analysis nodes...")
-  const ctx = audioContextRef.current
-  const source = ctx.createMediaStreamSource(stream)
-  const analyser = ctx.createAnalyser()
-  analyser.fftSize = 1024
-  analyser.smoothingTimeConstant = 0.85
-
-  // Some browsers optimize away disconnected graphs; keep a silent sink
-  const silentGain = ctx.createGain()
-  silentGain.gain.value = 0
-
-  source.connect(analyser)
-  analyser.connect(silentGain)
-  silentGain.connect(ctx.destination)
-
-  // Save refs for reuse/cleanup
-  sourceNodeRef.current = source
-  analyserRef.current = analyser
-  silentGainRef.current = silentGain
+      const source = audioContextRef.current.createMediaStreamSource(stream)
+      analyserRef.current = audioContextRef.current.createAnalyser()
+      analyserRef.current.fftSize = 256
+      analyserRef.current.smoothingTimeConstant = 0.8
+      source.connect(analyserRef.current)
 
       console.log("[v0] 🎵 Audio nodes connected successfully")
       console.log("[v0] 🎵 Analyser settings:", {
@@ -810,31 +807,18 @@ export function FloatingVideoWidget({
 
       // Test initial audio levels
       console.log("[v0] 🎵 Testing initial audio analysis...")
-      const testArray = new Uint8Array(analyserRef.current.fftSize)
-      analyserRef.current.getByteTimeDomainData(testArray)
-      const rms0 = Math.sqrt(
-        Array.from(testArray).reduce((acc, v) => {
-          const norm = (v - 128) / 128
-          return acc + norm * norm
-        }, 0) / testArray.length,
-      )
-      console.log("[v0] 🎵 Initial audio RMS:", Math.round(rms0 * 1000) / 10, "%")
+      const testArray = new Uint8Array(analyserRef.current.frequencyBinCount)
+      analyserRef.current.getByteFrequencyData(testArray)
+      const initialLevel = testArray.reduce((sum, value) => sum + value, 0) / testArray.length
+      console.log("[v0] 🎵 Initial audio level test:", Math.round((initialLevel / 255) * 100) + "%")
 
       const updateAudioLevel = () => {
         try {
           if (analyserRef.current && audioContextRef.current?.state === 'running') {
-            const analyser = analyserRef.current
-            const dataArray = new Uint8Array(analyser.fftSize)
-            analyser.getByteTimeDomainData(dataArray)
-            // Compute RMS around 128 center
-            let sumSquares = 0
-            for (let i = 0; i < dataArray.length; i++) {
-              const norm = (dataArray[i] - 128) / 128
-              sumSquares += norm * norm
-            }
-            const rms = Math.sqrt(sumSquares / dataArray.length)
-            // Convert RMS (~0..1) to a 0..100 display that is not too jumpy
-            const currentLevel = Math.min(100, Math.round(rms * 140 * 100) / 100) // scale factor ~1.4
+            const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
+            analyserRef.current.getByteFrequencyData(dataArray)
+            const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length
+            const currentLevel = Math.round((average / 255) * 100)
 
             // Update the state to trigger re-renders
             setAudioLevel(currentLevel)
@@ -883,39 +867,26 @@ export function FloatingVideoWidget({
       updateAudioLevel()
       console.log('[v0] 🎵 ✅ Audio level monitoring started successfully')
       
-      // Add handlers to resume suspended audio context
+      // Add click handler to resume suspended audio context
       const handleUserInteraction = () => {
         if (audioContextRef.current?.state === 'suspended') {
           console.log('[v0] 🎵 User interaction detected, resuming AudioContext...')
           audioContextRef.current.resume().then(() => {
             console.log('[v0] 🎵 ✅ AudioContext resumed via user interaction')
-            if (userInteractionHandlerRef.current) {
-              document.removeEventListener('click', userInteractionHandlerRef.current)
-              document.removeEventListener('keydown', userInteractionHandlerRef.current)
-              userInteractionHandlerRef.current = null
-            }
+            document.removeEventListener('click', handleUserInteraction)
           }).catch(err => {
             console.warn('[v0] 🎵 ⚠️ Failed to resume AudioContext on user interaction:', err)
           })
         }
       }
       
-      const handleVisibility = () => {
-        if (!document.hidden && audioContextRef.current?.state === 'suspended') {
-          audioContextRef.current.resume().catch(() => {})
-        }
-      }
       if (audioContextRef.current.state === 'suspended') {
-        console.log('[v0] 🎵 AudioContext is suspended, adding listeners for resume')
-        userInteractionHandlerRef.current = handleUserInteraction
-        visibilityHandlerRef.current = handleVisibility
-        document.addEventListener('click', handleUserInteraction)
-        document.addEventListener('keydown', handleUserInteraction)
-        document.addEventListener('visibilitychange', handleVisibility)
+        console.log('[v0] 🎵 AudioContext is suspended, adding click listener for resume')
+        document.addEventListener('click', handleUserInteraction, { once: true })
       }
       
     } catch (error) {
-  console.error('[v0] 🎵 ❌ Failed to initialize audio analysis:', error)
+      console.error('[v0] 🎵 ❌ Failed to initialize audio analysis:', error)
       sessionStorage.setItem('audio-widget-error', error instanceof Error ? error.message : String(error))
       setAudioLevel(0)
       audioInitializedRef.current = false
@@ -969,7 +940,7 @@ export function FloatingVideoWidget({
             trackStates: audioTracks.map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState }))
           })
         } else {
-          console.warn("[v0] 🎵 ⚠️ No audio tracks found in stream!")
+          console.warn("[v0] 🎵 ⚠️ No audio tracks found in stream")
         }
 
         // Initialize components (should be faster since precheck prepared them)
@@ -995,6 +966,7 @@ export function FloatingVideoWidget({
     initVideo()
 
     return () => {
+      
       isCleaningUpRef.current = true
 
       if (animationRef.current) {
@@ -1019,28 +991,11 @@ export function FloatingVideoWidget({
           console.warn("[v0] AudioContext close error (safe to ignore):", error)
         }
       }
-      // Disconnect nodes and remove listeners
-      try {
-        sourceNodeRef.current?.disconnect()
-        silentGainRef.current?.disconnect()
-      } catch {}
-      if (userInteractionHandlerRef.current) {
-        document.removeEventListener('click', userInteractionHandlerRef.current)
-        document.removeEventListener('keydown', userInteractionHandlerRef.current)
-        userInteractionHandlerRef.current = null
-      }
-      if (visibilityHandlerRef.current) {
-        document.removeEventListener('visibilitychange', visibilityHandlerRef.current)
-        visibilityHandlerRef.current = null
-      }
-
-      // Reset audio initialized flag and clear refs
-      audioInitializedRef.current = false
-      analyserRef.current = null
-      sourceNodeRef.current = null
-      silentGainRef.current = null
-      audioStreamRef.current = null
-      audioContextRef.current = null
+  // Reset audio initialized flag and clear refs
+  audioInitializedRef.current = false
+  analyserRef.current = null
+  audioStreamRef.current = null
+  audioContextRef.current = null
     }
   }, []) // Empty dependency array to prevent reinitialization
 
@@ -1116,6 +1071,7 @@ export function FloatingVideoWidget({
       setTabSwitchCount((prev) => {
         const newCount = prev + 1
         console.log("[v0] Tab switch detected - new count:", newCount)
+        onAddEvent?.({ eventType: "tab_switch", severity: "critical" as const, context: "coding", data: { when: Date.now() } })
         return newCount
       })
     }
@@ -1131,15 +1087,14 @@ export function FloatingVideoWidget({
 
   const handleKeyDown = (e: KeyboardEvent) => {
     setKeystrokeCount((prev) => prev + 1)
+    onAddEvent?.({ eventType: "keystroke", severity: "info" as const, context: "coding", data: {} })
 
-    // Track copy, cut, paste attempts
+    // Track and block copy, cut, paste attempts
     if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "x" || e.key === "v")) {
-      if (e.key === "c") {
-        setCopyAttempts((prev) => prev + 1)
-        e.preventDefault() // Block copy action
-        console.log("[v0] Copy attempt blocked")
-      }
-      console.log(`[v0] ${e.key === "c" ? "Copy" : e.key === "x" ? "Cut" : "Paste"} event detected`)
+      setCopyAttempts((prev) => prev + 1)
+      e.preventDefault()
+      onAddEvent?.({ eventType: "keystroke", severity: "warning" as const, context: "coding", data: { copyCutPaste: true, key: e.key } })
+      console.log(`[v0] ${e.key === "c" ? "Copy" : e.key === "x" ? "Cut" : "Paste"} attempt blocked`)
     }
   }
 

@@ -177,6 +177,7 @@ export default function ProctoringWidget({
             sessionData={sessionData ?? undefined}
             onStatusChange={(status) => console.log("[v0] Monitoring status:", status)}
             onUpdateSession={handleSessionUpdate}
+            onAddEvent={handleAddEvent}
           />
         )}
       </div>

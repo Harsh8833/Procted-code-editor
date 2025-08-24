@@ -36,7 +36,7 @@ export function CodingEnvironment({
   const [timeSpent, setTimeSpent] = useState(0)
   const editorRef = useRef<HTMLTextAreaElement>(null)
 
-  const debounceTimeoutRef = useRef<NodeJS.Timeout>()
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastCodeSaveRef = useRef<string>("")
   const keystrokeCountRef = useRef<number>(0)
   const startTimeRef = useRef<number>(Date.now())
@@ -62,12 +62,23 @@ export function CodingEnvironment({
     (newCode: string) => {
       setCode(newCode)
       keystrokeCountRef.current += 1
+  onAddEvent?.({ eventType: "keystroke", severity: "info" as const, context: "coding", data: {} })
 
       if (onUpdateSession) {
         const linesOfCode = newCode.split("\n").filter((line) => line.trim().length > 0).length
+        const base =
+          sessionData?.codingMetrics ?? {
+            totalKeystrokes: 0,
+            linesOfCode: 0,
+            codeExecutions: 0,
+            externalCopyEvents: 0,
+            languageSwitches: 0,
+            averageTypingSpeed: 0,
+            codingTimeVsReadingTime: { coding: 0, reading: 0 },
+          }
         onUpdateSession({
           codingMetrics: {
-            ...sessionData?.codingMetrics,
+            ...base,
             totalKeystrokes: keystrokeCountRef.current,
             linesOfCode,
             averageTypingSpeed: keystrokeCountRef.current / ((Date.now() - startTimeRef.current) / 60000), // WPM
@@ -77,7 +88,7 @@ export function CodingEnvironment({
 
       debouncedSaveCode(newCode)
     },
-    [debouncedSaveCode, onUpdateSession, sessionData?.codingMetrics],
+  [debouncedSaveCode, onUpdateSession, sessionData?.codingMetrics, onAddEvent],
   )
 
   const handleFocus = useCallback(() => {
@@ -89,42 +100,27 @@ export function CodingEnvironment({
     const focusTime = Date.now() - lastFocusTimeRef.current
     totalFocusTimeRef.current += focusTime
 
-    if (onUpdateSession && onAddEvent) {
-      onUpdateSession({
-        sessionStats: {
-          ...sessionData?.sessionStats,
-          gazeDuration: totalFocusTimeRef.current,
-          focusBreaks: (sessionData?.sessionStats?.focusBreaks || 0) + 1,
-        },
-      })
-
+    if (onAddEvent) {
       onAddEvent({
-        eventType: "focus_break",
+        eventType: "gaze_tracking",
         severity: "warning" as const,
-        description: `Editor lost focus for ${Math.round(focusTime / 1000)}s`,
-        metadata: { focusTime },
+        context: "coding",
+        data: { focusTimeMs: focusTime, totalFocusMs: totalFocusTimeRef.current, type: "focus_break" },
       })
     }
 
     console.log("[v0] Editor lost focus, duration:", focusTime)
-  }, [onUpdateSession, onAddEvent, sessionData?.sessionStats])
+  }, [onAddEvent])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        if (onAddEvent && onUpdateSession) {
+        if (onAddEvent) {
           onAddEvent({
             eventType: "tab_switch",
             severity: "critical" as const,
-            description: "User switched away from the assessment tab",
-            metadata: { timestamp: Date.now() },
-          })
-
-          onUpdateSession({
-            sessionStats: {
-              ...sessionData?.sessionStats,
-              tabSwitches: (sessionData?.sessionStats?.tabSwitches || 0) + 1,
-            },
+            context: "coding",
+            data: { timestamp: Date.now() },
           })
         }
         console.log("[v0] Tab switched away from assessment")
@@ -141,14 +137,7 @@ export function CodingEnvironment({
     const timer = setInterval(() => {
       setTimeSpent((prev) => prev + 1)
 
-      if (onUpdateSession) {
-        onUpdateSession({
-          sessionStats: {
-            ...sessionData?.sessionStats,
-            totalDuration: Date.now() - (sessionData?.startTime || Date.now()),
-          },
-        })
-      }
+  // totalDuration is maintained centrally by the session store ticker
     }, 1000)
 
     return () => {
@@ -163,23 +152,12 @@ export function CodingEnvironment({
     setIsRunning(true)
     console.log("[v0] Executing code:", { language, code })
 
-    if (onAddEvent && onUpdateSession) {
+    if (onAddEvent) {
       onAddEvent({
         eventType: "code_execution",
         severity: "info" as const,
-        description: `Code executed in ${language}`,
-        metadata: { language, codeLength: code.length, linesOfCode: code.split("\n").length },
-      })
-
-      onUpdateSession({
-        codingMetrics: {
-          ...sessionData?.codingMetrics,
-          codeExecutions: (sessionData?.codingMetrics?.codeExecutions || 0) + 1,
-        },
-        sessionStats: {
-          ...sessionData?.sessionStats,
-          codeExecutionCount: (sessionData?.sessionStats?.codeExecutionCount || 0) + 1,
-        },
+        context: "coding",
+        data: { language, codeLength: code.length, linesOfCode: code.split("\n").length },
       })
     }
 
@@ -190,14 +168,7 @@ export function CodingEnvironment({
   }
 
   const handleNextQuestion = () => {
-    if (onUpdateSession) {
-      onUpdateSession({
-        sessionStats: {
-          ...sessionData?.sessionStats,
-          questionsAttempted: Math.max(sessionData?.sessionStats?.questionsAttempted || 0, currentQuestionIndex + 1),
-        },
-      })
-    }
+  // questionsAttempted should be updated by the container using a centralized reducer; avoid direct mutation here
 
     if (currentQuestionIndex < questions.length - 1) {
       onQuestionChange(currentQuestionIndex + 1)
@@ -217,6 +188,32 @@ export function CodingEnvironment({
       onQuestionChange(currentQuestionIndex - 1)
     }
   }
+
+  // Block copy/cut/paste in the editor and count as violations
+  useEffect(() => {
+    const el = editorRef.current
+    if (!el) return
+    const onCopy = (e: ClipboardEvent) => {
+      e.preventDefault()
+      onAddEvent?.({ eventType: "keystroke", severity: "warning" as const, context: "coding", data: { copyCutPaste: true, action: "copy" } })
+    }
+    const onCut = (e: ClipboardEvent) => {
+      e.preventDefault()
+      onAddEvent?.({ eventType: "keystroke", severity: "warning" as const, context: "coding", data: { copyCutPaste: true, action: "cut" } })
+    }
+    const onPaste = (e: ClipboardEvent) => {
+      e.preventDefault()
+      onAddEvent?.({ eventType: "keystroke", severity: "warning" as const, context: "coding", data: { copyCutPaste: true, action: "paste" } })
+    }
+    el.addEventListener("copy", onCopy)
+    el.addEventListener("cut", onCut)
+    el.addEventListener("paste", onPaste)
+    return () => {
+      el.removeEventListener("copy", onCopy)
+      el.removeEventListener("cut", onCut)
+      el.removeEventListener("paste", onPaste)
+    }
+  }, [onAddEvent])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
