@@ -1,13 +1,15 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Camera, Mic, Monitor, CheckCircle, AlertTriangle, Loader2, User, RefreshCw } from "lucide-react"
+import { Camera, Mic, Monitor, CheckCircle, AlertTriangle, Loader2, User } from "lucide-react"
 import type { PreCheckResults } from "../types/proctoring"
+import { createMicMeter } from "@/lib/audio/meter"
+import { detectFace } from "@/lib/vision/face"
 
 interface PreCheckComponentProps {
   onComplete: (results: PreCheckResults) => void
@@ -20,24 +22,52 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
   const [results, setResults] = useState<Partial<PreCheckResults>>({})
   const [isRunning, setIsRunning] = useState(false)
   const [faceDetectionFrames, setFaceDetectionFrames] = useState(0)
+  const [micLevel, setMicLevel] = useState(0)
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
   const [showPermissionHelp, setShowPermissionHelp] = useState(false)
+  const [errorsByStep, setErrorsByStep] = useState<Record<string, string>>({})
+  const [needsWindowPermission, setNeedsWindowPermission] = useState(false)
+  const [windowPermissionState, setWindowPermissionState] = useState<PermissionState | 'unsupported' | null>(null)
+
+  // Keep references to streams and meter for cleanup
+  const camStreamRef = useRef<MediaStream | null>(null)
+  const micStreamRef = useRef<MediaStream | null>(null)
+  const micMeterRef = useRef<ReturnType<typeof createMicMeter> | null>(null)
+  const animRef = useRef<number | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const userGestureResolverRef = useRef<((value: unknown) => void) | null>(null)
+  const screenCountAfterPromptRef = useRef<number | null>(null)
 
   const steps = [
     { id: "camera", label: "Camera Access", icon: Camera },
     { id: "microphone", label: "Microphone Access", icon: Mic },
     { id: "face", label: "Face Detection", icon: User },
-    { id: "monitor", label: "Monitor Verification", icon: Monitor },
+  { id: "monitor", label: "Monitor Verification", icon: Monitor },
     { id: "browser", label: "Browser Support", icon: CheckCircle },
   ]
+
+  const stopStreamsAndMeter = () => {
+    try { camStreamRef.current?.getTracks().forEach(t => t.stop()) } catch {}
+    try { micStreamRef.current?.getTracks().forEach(t => t.stop()) } catch {}
+    camStreamRef.current = null
+    micStreamRef.current = null
+    if (micMeterRef.current) {
+      micMeterRef.current.dispose().catch(() => {})
+      micMeterRef.current = null
+    }
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current)
+      animRef.current = null
+    }
+  }
 
   const runPreChecks = useCallback(async () => {
     setIsRunning(true)
     const checkResults: Partial<PreCheckResults> = {}
 
     try {
-      // Step 1: Camera Access with proper initialization
+  // Step 1: Camera Access with preview
       setCurrentStep(0)
       setProgress(20)
       console.log("[v0] Checking camera access...")
@@ -49,16 +79,27 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
         )
         
         const cameraPromise = navigator.mediaDevices.getUserMedia({
-          video: { 
-            width: { ideal: 640 }, 
+          video: {
+            width: { ideal: 640 },
             height: { ideal: 480 },
-            frameRate: { ideal: 15 }
+            frameRate: { ideal: 15 },
           },
         })
-        
-        const cameraStream = await Promise.race([cameraPromise, cameraTimeout])
+
+        const cameraStream = (await Promise.race([cameraPromise, cameraTimeout])) as MediaStream
+        camStreamRef.current = cameraStream
         checkResults.cameraAccess = true
         console.log("[v0] Camera access granted")
+
+        // Attach to a hidden/local video element for face detection
+        if (!videoRef.current) {
+          const v = document.createElement('video')
+          v.muted = true
+          v.playsInline = true
+          videoRef.current = v
+        }
+        videoRef.current.srcObject = cameraStream
+        try { await videoRef.current.play() } catch {}
 
         // Step 2: Microphone Access with timeout
         setCurrentStep(1)
@@ -69,37 +110,51 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
           setTimeout(() => reject(new Error("Audio access timeout")), 5000)
         )
         
-        const audioPromise = navigator.mediaDevices.getUserMedia({ 
+        const audioPromise = navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true
-          }
+            autoGainControl: true,
+          },
         })
-        
-        const audioStream = await Promise.race([audioPromise, audioTimeout])
+
+        const audioStream = (await Promise.race([audioPromise, audioTimeout])) as MediaStream
+        micStreamRef.current = audioStream
         checkResults.microphoneAccess = true
         console.log("[v0] Microphone access granted")
 
         // Step 3: Initialize Audio Analysis (prepare for later use)
         console.log("[v0] Initializing audio analysis...")
         await initializeAudioContext(audioStream)
+        // Start live mic meter
+        try {
+          const meter = createMicMeter(audioStream)
+          micMeterRef.current = meter
+          const loop = () => {
+            setMicLevel(meter.getLevel())
+            animRef.current = requestAnimationFrame(loop)
+          }
+          animRef.current = requestAnimationFrame(loop)
+        } catch (e) {
+          console.warn('[v0] Mic meter failed:', e)
+        }
 
-        // Step 4: Face Detection Verification
+    // Step 4: Face Detection Verification
         setCurrentStep(2)
         setProgress(60)
         console.log("[v0] Verifying face detection...")
 
-        const faceDetectionResult = await verifyFaceDetection(cameraStream)
-        checkResults.faceDetection = faceDetectionResult
+  const faceDetectionResult = await verifyFaceDetection(cameraStream)
+  checkResults.faceDetection = faceDetectionResult
+
+  // Check window-management permission right after face detection (no prompt here)
+  setWindowPermissionState(await requestWindowManagementPermission())
 
         // Step 5: Initialize Face Detection Model (prepare for later use)
         console.log("[v0] Initializing face detection model...")
         await initializeFaceDetectionModel()
 
-        // Cleanup streams but keep the permissions granted
-        cameraStream.getTracks().forEach((track) => track.stop())
-        audioStream.getTracks().forEach((track) => track.stop())
+  // Keep streams active for monitor step and mic meter. We'll clean later.
 
       } catch (mediaError) {
         console.error("[v0] Media access error:", mediaError)
@@ -108,27 +163,48 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
         if (mediaError instanceof DOMException) {
           switch (mediaError.name) {
             case 'NotAllowedError':
-              throw new Error("Camera and microphone permissions were denied. Please click the camera icon in your browser's address bar to allow access, then click 'Retry Pre-checks'.")
+              {
+                const msg = "Camera and microphone permissions were denied. Please click the camera icon in your browser's address bar to allow access, then click 'Retry'."
+                setErrorsByStep(prev => ({ ...prev, [steps[currentStep].id]: msg }))
+                throw new Error(msg)
+              }
             case 'NotFoundError':
-              throw new Error("Camera or microphone not found. Please ensure your devices are connected and try again.")
+              {
+                const msg = "Camera or microphone not found. Please ensure your devices are connected and try again."
+                setErrorsByStep(prev => ({ ...prev, [steps[currentStep].id]: msg }))
+                throw new Error(msg)
+              }
             case 'NotReadableError':
-              throw new Error("Camera or microphone is already in use by another application. Please close other apps using these devices and try again.")
+              {
+                const msg = "Camera or microphone is already in use by another application. Please close other apps using these devices and try again."
+                setErrorsByStep(prev => ({ ...prev, [steps[currentStep].id]: msg }))
+                throw new Error(msg)
+              }
             case 'OverconstrainedError':
-              throw new Error("Camera or microphone constraints could not be satisfied. Please check your device settings and try again.")
+              {
+                const msg = "Camera or microphone constraints could not be satisfied. Please check your device settings and try again."
+                setErrorsByStep(prev => ({ ...prev, [steps[currentStep].id]: msg }))
+                throw new Error(msg)
+              }
             default:
-              throw new Error(`Media access failed: ${mediaError.message}. Please check your permissions and try again.`)
+              {
+                const msg = `Media access failed: ${mediaError.message}. Please check your permissions and try again.`
+                setErrorsByStep(prev => ({ ...prev, [steps[currentStep].id]: msg }))
+                throw new Error(msg)
+              }
           }
         }
         
         checkResults.cameraAccess = false
         checkResults.microphoneAccess = false
+        setErrorsByStep(prev => ({ ...prev, [steps[currentStep].id]: (mediaError as Error)?.message || 'Failed' }))
         throw mediaError
       }
 
-      // Step 4: Monitor Verification
+  // Step 4: Monitor Verification
       setCurrentStep(3)
       setProgress(80)
-      console.log("[v0] Checking monitor configuration...")
+  console.log("[v0] Checking monitor configuration...")
 
       const monitorCount = await checkMonitorCount()
       checkResults.monitorCount = monitorCount
@@ -167,13 +243,11 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
         console.log("[v0] All pre-checks passed successfully")
         setTimeout(() => onComplete(finalResults), 1000)
       } else {
-        const failedChecks = []
-        if (!finalResults.cameraAccess) failedChecks.push("Camera access")
-        if (!finalResults.microphoneAccess) failedChecks.push("Microphone access")
-        if (!finalResults.faceDetection.status) failedChecks.push("Face detection")
-        if (!finalResults.browserSupport) failedChecks.push("Browser support")
-        
-        throw new Error(`Pre-checks failed: ${failedChecks.join(", ")}. Please resolve these issues and try again.`)
+        const failedChecks: string[] = []
+        if (!finalResults.cameraAccess) { failedChecks.push("Camera access"); setErrorsByStep(prev => ({ ...prev, camera: prev.camera || 'Camera access failed' })) }
+        if (!finalResults.microphoneAccess) { failedChecks.push("Microphone access"); setErrorsByStep(prev => ({ ...prev, microphone: prev.microphone || 'Microphone access failed' })) }
+  if (!finalResults.browserSupport) { failedChecks.push("Browser support"); setErrorsByStep(prev => ({ ...prev, browser: prev.browser || 'Browser not supported' })) }
+        throw new Error(`Pre-checks failed: ${failedChecks.join(", ")}.`)
       }
     } catch (error) {
       console.error("[v0] Pre-check failed:", error)
@@ -181,11 +255,14 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
       setErrorMessage(error instanceof Error ? error.message : "Pre-check failed")
       onError(error instanceof Error ? error.message : "Pre-check failed")
     } finally {
-      setIsRunning(false)
+  setIsRunning(false)
+  // Stop streams & meter once done
+  stopStreamsAndMeter()
     }
   }, [onComplete, onError])
 
   const retryPreChecks = useCallback(() => {
+  stopStreamsAndMeter()
     setHasError(false)
     setErrorMessage("")
     setShowPermissionHelp(false)
@@ -193,6 +270,7 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
     setProgress(0)
     setResults({})
     setFaceDetectionFrames(0)
+  setMicLevel(0)
     runPreChecks()
   }, [runPreChecks])
 
@@ -320,32 +398,37 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
   const verifyFaceDetection = async (
     stream: MediaStream,
   ): Promise<{ status: boolean; confidence: number; timestamp: number }> => {
-    return new Promise((resolve) => {
-      const video = document.createElement("video")
-      video.srcObject = stream
-      video.play()
-
-      let frameCount = 0
-      const maxFrames = 30 // Check for 2 seconds at 15fps
-
-      const checkFrame = () => {
-        frameCount++
-        setFaceDetectionFrames(frameCount)
-
-        if (frameCount >= maxFrames) {
-          resolve({
-            status: true,
-            confidence: 0.85,
-            timestamp: Date.now(),
-          })
-          return
+    // Analyze up to 30 frames and require >= 5 positive detections
+    const v = videoRef.current!
+    let detectedFrames = 0
+    let confidence = 0
+    let frames = 0
+    const maxFrames = 30
+    while (frames < maxFrames && detectedFrames < 5) {
+      try {
+        const r = await detectFace(v)
+        if (r.present) {
+          detectedFrames += 1
+          confidence = Math.max(confidence, r.confidence)
         }
+      } catch {}
+      frames++
+      setFaceDetectionFrames(frames)
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    const status = detectedFrames >= 5
+    return { status, confidence, timestamp: Date.now() }
+  }
 
-        setTimeout(checkFrame, 66) // ~15fps
-      }
-
-      video.onloadedmetadata = () => checkFrame()
-    })
+  const requestWindowManagementPermission = async (): Promise<PermissionState | 'unsupported'> => {
+    try {
+      if (!('permissions' in navigator)) return 'unsupported'
+      // @ts-ignore: window-management is experimental
+      const perm = await navigator.permissions.query({ name: 'window-management' as any })
+      return perm.state as PermissionState
+    } catch {
+      return 'unsupported'
+    }
   }
 
   const checkMonitorCount = async (): Promise<number> => {
@@ -357,56 +440,39 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
         console.warn("[v0] Not in secure context, using fallback screen detection")
         return estimateScreenCount()
       }
-
-      // Method 1: Try Screen Enumeration API with explicit permission request
-      if ("getScreenDetails" in window) {
+      // Window Management permission first (no prompt without gesture)
+      if ('permissions' in navigator) {
         try {
-          console.log("[v0] Requesting multi-screen permission...")
-          
-          // This will trigger a permission dialog if not already granted
-          const screenDetails = await (window as any).getScreenDetails()
-          console.log("[v0] Multi-screen permission granted, screens found:", screenDetails.screens.length)
-          return screenDetails.screens.length
-          
-        } catch (screenError) {
-          console.warn("[v0] Screen Enumeration API failed:", screenError)
-          
-          if (screenError instanceof DOMException && screenError.name === 'NotAllowedError') {
-            console.log("[v0] Multi-screen permission denied by user")
-          }
-          // Continue to fallback methods
-        }
-      }
-
-      // Method 2: Try Window Management API for better screen detection
-      try {
-        console.log("[v0] Attempting Window Management API for screen detection...")
-        
-        // Request window management permission which gives access to screen info
-        if ('getScreenDetails' in window || navigator.permissions) {
-          try {
-            // Try to request window-management permission explicitly
-            const permission = await navigator.permissions.query({ name: 'window-management' as any })
-            console.log("[v0] Window management permission state:", permission.state)
-            
-            if (permission.state === 'granted') {
-              // If we have permission, try to get screen details
-              if ('getScreenDetails' in window) {
-                const screenDetails = await (window as any).getScreenDetails()
-                console.log("[v0] Window management enabled, screens found:", screenDetails.screens.length)
-                return screenDetails.screens.length
-              }
-            } else if (permission.state === 'prompt') {
-              console.log("[v0] Window management permission requires user interaction")
-              // The permission will be requested when the user interacts with the app
+          // @ts-ignore experimental name
+          const permission = await navigator.permissions.query({ name: 'window-management' as any })
+          console.log("[v0] Window management permission state:", permission.state)
+          setWindowPermissionState(permission.state as PermissionState)
+          if (permission.state === 'granted') {
+            if ('getScreenDetails' in window) {
+              const screenDetails = await (window as any).getScreenDetails()
+              console.log("[v0] Window management granted, screens:", screenDetails.screens.length)
+              return screenDetails.screens.length
             }
-          } catch (permissionError) {
-            console.warn("[v0] Window management permission check failed:", permissionError)
+          } else if (permission.state === 'prompt') {
+            // Show UI and wait for user gesture to trigger getScreenDetails
+            console.log("[v0] Waiting for user gesture to request multi-screen permission...")
+            setNeedsWindowPermission(true)
+            await new Promise((resolve) => {
+              userGestureResolverRef.current = resolve
+            })
+            setNeedsWindowPermission(false)
+            // After user clicked and we attempted to get details, read result
+            if (screenCountAfterPromptRef.current != null) {
+              const count = screenCountAfterPromptRef.current
+              screenCountAfterPromptRef.current = null
+              console.log("[v0] Screens after user gesture:", count)
+              return count
+            }
+            console.warn('[v0] User gesture did not yield screen details, falling back')
           }
+        } catch (permissionError) {
+          console.warn("[v0] Window management permission check failed:", permissionError)
         }
-      } catch (managementError) {
-        console.log("[v0] Window Management API not available:", managementError)
-        // Continue to fallback
       }
 
       // Method 3: Fallback to basic screen detection
@@ -415,6 +481,25 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
     } catch (error) {
       console.warn("[v0] All monitor detection methods failed:", error)
       return 1
+    }
+  }
+
+  const handleRequestWindowPermission = async () => {
+    try {
+      if ('getScreenDetails' in window) {
+        // @ts-ignore experimental
+        const screenDetails = await (window as any).getScreenDetails()
+        screenCountAfterPromptRef.current = screenDetails.screens.length
+      } else {
+        screenCountAfterPromptRef.current = null
+      }
+    } catch (e) {
+      console.warn('[v0] getScreenDetails failed during user gesture:', e)
+      screenCountAfterPromptRef.current = null
+    } finally {
+      userGestureResolverRef.current?.(true)
+      userGestureResolverRef.current = null
+      setNeedsWindowPermission(false)
     }
   }
 
@@ -474,10 +559,14 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
     })
   }
 
+  const startedRef = useRef(false)
   useEffect(() => {
-    // Don't auto-start pre-checks - wait for user interaction to ensure permission dialogs work
-    console.log("[v0] PreCheck component ready - waiting for user interaction")
-  }, [])
+    if (!startedRef.current) {
+      startedRef.current = true
+      runPreChecks()
+    }
+    return () => stopStreamsAndMeter()
+  }, [runPreChecks])
 
   const getStepStatus = (stepIndex: number) => {
     if (stepIndex < currentStep) return "complete"
@@ -528,9 +617,46 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
                   {getStepIcon(step, status)}
                   <div className="flex-1">
                     <div className="font-medium">{step.label}</div>
-                    {step.id === "face" && status === "running" && (
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        Analyzing frames: {faceDetectionFrames}/30
+                    {step.id === "face" && (
+                      <div className="mt-2 flex items-center gap-3">
+                        <video
+                          ref={videoRef}
+                          muted
+                          playsInline
+                          autoPlay
+                          className="h-20 w-28 rounded-md bg-black object-cover"
+                        />
+                        {status === "running" && (
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            Analyzing frames: {faceDetectionFrames}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* No screen sharing prompt; we rely on window-management/getScreenDetails only */}
+                    {step.id === 'microphone' && status !== 'pending' && (
+                      <div className="mt-1 h-2 w-40 rounded bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                        <div
+                          className="h-2 bg-emerald-500 transition-[width] duration-150"
+                          style={{ width: `${Math.min(100, Math.round(micLevel * 200))}%` }}
+                        />
+                      </div>
+                    )}
+                    {errorsByStep[step.id] && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-sm text-red-600 dark:text-red-400">{errorsByStep[step.id]}</span>
+                        <Button size="sm" variant="outline" disabled={isRunning} onClick={() => runPreChecks()}>
+                          Retry
+                        </Button>
+                      </div>
+                    )}
+                    {step.id === 'monitor' && (status === 'running' || status === 'pending') && needsWindowPermission && (
+                      <div className="mt-2 flex items-center gap-3">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Enable multi-screen detection</span>
+                        <Button size="sm" onClick={handleRequestWindowPermission}>
+                          Allow Window Management
+                        </Button>
+                     
                       </div>
                     )}
                   </div>
@@ -582,56 +708,19 @@ export function PreCheckComponent({ onComplete, onError }: PreCheckComponentProp
                       </ol>
                       
                       <div className="flex gap-2 pt-2">
-                        <Button 
-                          onClick={requestPermissionsManually}
-                          variant="default" 
-                          size="sm"
-                          className="flex items-center gap-2"
-                        >
-                          <Camera className="h-4 w-4" />
-                          Try Permission Request Again
-                        </Button>
-                        <Button 
-                          onClick={retryPreChecks} 
-                          variant="outline" 
-                          size="sm"
-                          disabled={isRunning}
-                          className="flex items-center gap-2"
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                          Retry Pre-checks
+                        <Button onClick={requestPermissionsManually} variant="default" size="sm" className="flex items-center gap-2">
+                          <Camera className="h-4 w-4" /> Request Permission Again
                         </Button>
                       </div>
                     </div>
                   )}
-                  
-                  {!showPermissionHelp && (
-                    <Button 
-                      onClick={retryPreChecks} 
-                      variant="outline" 
-                      size="sm"
-                      disabled={isRunning}
-                      className="flex items-center gap-2"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      Retry Pre-checks
-                    </Button>
-                  )}
+                  {/* Global retry removed; use per-step retry above */}
                 </div>
               </AlertDescription>
             </Alert>
           )}
 
-          {!isRunning && !hasError && progress === 0 && (
-            <Button 
-              onClick={runPreChecks}
-              className="w-full py-6 text-lg font-semibold" 
-              size="lg"
-            >
-              <CheckCircle className="mr-2 h-5 w-5" />
-              Start System Pre-checks
-            </Button>
-          )}
+          {/* Auto-start enabled; start button removed */}
 
           {!isRunning && !hasError && progress === 100 && (
             <Alert>
