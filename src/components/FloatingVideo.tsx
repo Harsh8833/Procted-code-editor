@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import type { MonitoringStatus, SessionData } from "../types/proctoring"
 import { useAudioMonitor } from "../hooks/useAudioMonitor"
+import { createEmotionAnalyzer } from "../lib/vision/emotion"
 
 type FaceDetection = { x: number; y: number; width: number; height: number; confidence: number; landmarks?: [number, number][] }
 type PostureAnalysis = { isGoodPosture: boolean; shoulderAlignment: number; headTilt: number; confidence: number }
@@ -74,6 +75,9 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	const consecutiveFramesRef = useRef({ noFace: 0, multipleFaces: 0 })
 	const incidentRef = useRef({ noFace: false, multipleFaces: false, gazeOff: false })
 
+	// Emotion analyzer instance (with internal EMA)
+	const emotionAnalyzerRef = useRef<ReturnType<typeof createEmotionAnalyzer> | null>(null)
+
 	// Random snapshot scheduling (capture 5 random webcam images during the session)
 	const randomSnapshotTimersRef = useRef<number[]>([])
 	const randomSnapshotsTakenRef = useRef(0)
@@ -93,68 +97,63 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	useEffect(() => setAudioLevel(audioLevelPct), [audioLevelPct])
 	useEffect(() => setAudioAnomalyCount(anomalyCount), [anomalyCount])
 
-	const analyzeExpression = useCallback((faceRegion: ImageData, faceDetection: FaceDetection): ExpressionAnalysis => {
-		const data = faceRegion.data
-		let brightness = 0
-		let contrast = 0
-		let edgeCount = 0
-		for (let i = 0; i < data.length; i += 4) {
-			const r = data[i], g = data[i + 1], b = data[i + 2]
-			const gray = (r + g + b) / 3
-			brightness += gray
-			if (i > 0) {
-				const prevGray = (data[i - 4] + data[i - 3] + data[i - 2]) / 3
-				contrast += Math.abs(gray - prevGray)
-			}
-			if (i > faceRegion.width * 4 && i < data.length - faceRegion.width * 4) {
-				const topGray = (data[i - faceRegion.width * 4] + data[i - faceRegion.width * 4 + 1] + data[i - faceRegion.width * 4 + 2]) / 3
-				const bottomGray = (data[i + faceRegion.width * 4] + data[i + faceRegion.width * 4 + 1] + data[i + faceRegion.width * 4 + 2]) / 3
-				if (Math.abs(gray - topGray) > 30 || Math.abs(gray - bottomGray) > 30) edgeCount++
-			}
-		}
-		const pixelCount = data.length / 4
-		brightness /= pixelCount
-		contrast /= pixelCount
-		const edgeRatio = edgeCount / pixelCount
-		const faceAspectRatio = faceDetection.width / faceDetection.height
-		const emotions = {
-			neutral: Math.max(0.1, 0.6 - Math.abs(brightness - 120) / 200 - Math.abs(contrast - 15) / 100),
-			happy: Math.max(0.05, (brightness > 115 ? 0.4 : 0.1) + (edgeRatio > 0.15 ? 0.3 : 0) + (faceAspectRatio > 0.85 ? 0.2 : 0)),
-			focused: Math.max(0.05, (contrast > 20 ? 0.4 : 0.1) + (edgeRatio > 0.12 ? 0.2 : 0) + (brightness < 110 ? 0.2 : 0)),
-			concerned: Math.max(0.05, (brightness < 105 ? 0.3 : 0.1) + (contrast > 25 ? 0.2 : 0) + (faceAspectRatio < 0.75 ? 0.2 : 0)),
-			surprised: Math.max(0.05, (faceAspectRatio > 0.9 ? 0.3 : 0.1) + (edgeRatio > 0.18 ? 0.3 : 0)),
-		}
-		const timeVariation = (Date.now() % 10000) / 10000
-		Object.keys(emotions).forEach((k) => {
-			const key = k as keyof typeof emotions
-			emotions[key] += Math.sin(timeVariation * Math.PI * 2) * 0.1
-			emotions[key] = Math.max(0.05, Math.min(0.95, emotions[key]))
-		})
-		const dominant = (Object.entries(emotions).reduce((a, b) => (emotions[a[0] as keyof typeof emotions] > emotions[b[0] as keyof typeof emotions] ? a : b))[0]) as keyof typeof emotions
-		const confidence = Math.max(...Object.values(emotions))
-		return { dominant, confidence, emotions }
-	}, [])
+	// Setup emotion analyzer once
+	useEffect(() => { emotionAnalyzerRef.current = createEmotionAnalyzer({ alpha: 0.5 }) }, [])
 
-	const analyzeAttire = useCallback((faceRegion: ImageData, fullFrame: ImageData): AttireAnalysis => {
+	// Refined attire detection: analyze torso ROI below face; simple skin filtering and color uniformity
+	const analyzeAttire = useCallback((face: FaceDetection, fullFrame: ImageData): AttireAnalysis => {
 		const data = fullFrame.data
-		let darkColors = 0, lightColors = 0, colorVariety = 0
-		const upperHeight = Math.floor(fullFrame.height * 0.6)
-		for (let y = Math.floor(fullFrame.height * 0.3); y < upperHeight; y++) {
-			for (let x = 0; x < fullFrame.width; x += 4) {
-				const idx = (y * fullFrame.width + x) * 4
+		const W = fullFrame.width
+		const H = fullFrame.height
+		const x1 = Math.max(0, Math.floor(face.x - face.width * 0.2))
+		const x2 = Math.min(W, Math.floor(face.x + face.width * 1.2))
+		const yTop = Math.min(H - 1, Math.floor(face.y + face.height * 1.05))
+		const yBot = Math.min(H, yTop + Math.floor(face.height * 1.6))
+		if (yBot <= yTop || x2 <= x1) return { isProfessional: false, hasShirt: false, confidence: 0.4, details: "Insufficient torso ROI" }
+
+		let dark = 0, light = 0, variety = 0, satSum = 0, sampled = 0, edgeV = 0
+		const centerX = Math.floor((x1 + x2) / 2)
+
+		for (let y = yTop; y < yBot; y++) {
+			for (let x = x1; x < x2; x++) {
+				const idx = (y * W + x) * 4
 				const r = data[idx], g = data[idx + 1], b = data[idx + 2]
+				const maxc = Math.max(r, g, b)
+				const minc = Math.min(r, g, b)
+				const v = maxc
+				const s = maxc ? (maxc - minc) / maxc : 0
+				// crude skin mask
+				const isSkin = (v > 60 && v < 210 && s < 0.45 && r > 40 && g > 20 && b > 20 && r > b)
+				if (isSkin) continue
+
 				const brightness = (r + g + b) / 3
-				if (brightness < 100) darkColors++
-				else lightColors++
-				if (Math.abs(r - g) > 30 || Math.abs(g - b) > 30) colorVariety++
+				if (brightness < 105) dark++
+				else light++
+				if (Math.abs(r - g) > 28 || Math.abs(g - b) > 28) variety++
+				satSum += s
+				sampled++
+
+				// collar hint near center, upper third
+				if (y < yTop + (yBot - yTop) * 0.35 && Math.abs(x - centerX) < Math.max(6, Math.floor(face.width * 0.08)) && x > x1 + 1 && x < x2 - 1) {
+					const idxL = (y * W + (x - 1)) * 4
+					const idxR = (y * W + (x + 1)) * 4
+					const gray = (r + g + b) / 3
+					const grayL = (data[idxL] + data[idxL + 1] + data[idxL + 2]) / 3
+					const grayR = (data[idxR] + data[idxR + 1] + data[idxR + 2]) / 3
+					if (Math.abs(gray - grayL) > 28 || Math.abs(gray - grayR) > 28) edgeV++
+				}
 			}
 		}
-		const total = darkColors + lightColors
-		const darkRatio = total ? darkColors / total : 0
-		const varietyRatio = total ? colorVariety / total : 0
-		const isProfessional = darkRatio > 0.4 && varietyRatio < 0.3
-		const hasShirt = darkRatio > 0.2
-		return { isProfessional, hasShirt, confidence: 0.7, details: isProfessional ? "Professional attire detected" : "Casual attire detected" }
+		if (!sampled) return { isProfessional: false, hasShirt: false, confidence: 0.4, details: "Insufficient torso pixels" }
+		const darkRatio = dark / sampled
+		const varietyRatio = variety / sampled
+		const satAvg = satSum / sampled
+		const collarHint = edgeV / sampled
+
+		const hasShirt = darkRatio > 0.18 || satAvg < 0.35
+		const isProfessional = (darkRatio > 0.35 && varietyRatio < 0.22) || (satAvg < 0.28 && varietyRatio < 0.18) || (collarHint > 0.002)
+		const confidence = Math.max(0.5, Math.min(0.95, 0.55 + (hasShirt ? 0.15 : 0) + (isProfessional ? 0.15 : 0) - varietyRatio * 0.2))
+		return { isProfessional, hasShirt, confidence, details: isProfessional ? "Professional attire (solid/low-saturation)" : hasShirt ? "Casual attire" : "Torso not clearly visible" }
 	}, [])
 
 	const analyzeEyeContact = useCallback((face: FaceDetection, w: number, h: number): EyeContactAnalysis => {
@@ -297,6 +296,19 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 		}
 	}, [])
 
+	// IoU helper for NMS
+	const iou = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => {
+		const x1 = Math.max(a.x, b.x)
+		const y1 = Math.max(a.y, b.y)
+		const x2 = Math.min(a.x + a.width, b.x + b.width)
+		const y2 = Math.min(a.y + a.height, b.y + b.height)
+		const iw = Math.max(0, x2 - x1)
+		const ih = Math.max(0, y2 - y1)
+		const inter = iw * ih
+		const union = a.width * a.height + b.width * b.height - inter
+		return union > 0 ? inter / union : 0
+	}
+
 	const detectFaces = useCallback(async () => {
 		if (!videoRef.current || !canvasRef.current || !faceDetectorRef.current) {
 			animationRef.current = requestAnimationFrame(detectFaces)
@@ -312,37 +324,65 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 				const predictions: any[] = await faceDetectorRef.current.estimateFaces(video, false)
 				const vw = (video as any).videoWidth || video.width || canvas.width
 				const vh = (video as any).videoHeight || video.height || canvas.height
-				const marginX = Math.max(6, Math.floor(vw * 0.06))
-				const marginY = Math.max(6, Math.floor(vh * 0.06))
-				const minAreaRatio = 0.04
-				const maxAreaRatio = 0.65
-				const faces: FaceDetection[] = predictions
-					.map((p: any) => {
-						const [x, y] = p.topLeft
-						const [x2, y2] = p.bottomRight
-						return { x, y, width: x2 - x, height: y2 - y, confidence: p.probability?.[0] || 0.8, landmarks: p.landmarks as [number, number][] | undefined }
-					})
-					.filter((f: FaceDetection) => {
-						if (f.width <= 0 || f.height <= 0) return false
-						// fully inside with margins
-						if (f.x < marginX || f.y < marginY) return false
-						if (f.x + f.width > vw - marginX || f.y + f.height > vh - marginY) return false
-						// reasonable size
-						const area = f.width * f.height
-						const areaRatio = area / (vw * vh)
-						if (areaRatio < minAreaRatio || areaRatio > maxAreaRatio) return false
-						// reasonable aspect ratio
-						const ar = f.width / f.height
-						if (ar < 0.6 || ar > 1.6) return false
-						return true
-					})
+				const minAreaRatio = 0.02
+				const maxAreaRatio = 0.6
+				const raw: FaceDetection[] = predictions.map((p: any) => {
+					const [x, y] = p.topLeft
+					const [x2, y2] = p.bottomRight
+					return { x, y, width: x2 - x, height: y2 - y, confidence: p.probability?.[0] || 0.8, landmarks: p.landmarks as [number, number][] | undefined }
+				})
+				const filtered = raw.filter((f) => {
+					if (f.width <= 0 || f.height <= 0) return false
+					if ((f.confidence || 0) < 0.6) return false
+					const area = f.width * f.height
+					const areaRatio = area / (vw * vh)
+					if (areaRatio < minAreaRatio || areaRatio > maxAreaRatio) return false
+					// Allow partial faces: require at least 50% of bbox visible within frame
+					const x1 = Math.max(0, f.x)
+					const y1 = Math.max(0, f.y)
+					const x2 = Math.min(vw, f.x + f.width)
+					const y2 = Math.min(vh, f.y + f.height)
+					const visW = Math.max(0, x2 - x1)
+					const visH = Math.max(0, y2 - y1)
+					const visArea = visW * visH
+					if (visArea / Math.max(1, area) < 0.5) return false
+					const ar = f.width / f.height
+					if (ar < 0.5 || ar > 2.0) return false
+					return true
+				})
+				filtered.sort((a, b) => b.confidence - a.confidence)
+				const faces: FaceDetection[] = []
+				filtered.forEach((cand) => {
+					const overlap = faces.some((picked) => iou(cand, picked) > 0.45)
+					if (!overlap) faces.push(cand)
+				})
 			setFaceCount(faces.length)
 			setDetections(faces)
 			setIsStable(faces.length === 1)
 			setFaceDetected(faces.length > 0)
 
 			const now = Date.now()
-			let currentFaceState: "none" | "single" | "multiple" = faces.length === 0 ? "none" : faces.length === 1 ? "single" : "multiple"
+			// Stabilize face state using hysteresis counters
+			const rawState: "none" | "single" | "multiple" = faces.length === 0 ? "none" : faces.length === 1 ? "single" : "multiple"
+			if (rawState === "multiple") consecutiveFramesRef.current.multipleFaces += 1
+			else consecutiveFramesRef.current.multipleFaces = Math.max(0, consecutiveFramesRef.current.multipleFaces - 1)
+			if (rawState === "none") consecutiveFramesRef.current.noFace += 1
+			else consecutiveFramesRef.current.noFace = Math.max(0, consecutiveFramesRef.current.noFace - 1)
+
+			const MULTI_ON = 3, MULTI_OFF = 2
+			const NONE_ON = 3, NONE_OFF = 2
+			let currentFaceState = lastFaceStateRef.current
+			if (lastFaceStateRef.current !== "multiple") {
+				if (consecutiveFramesRef.current.multipleFaces >= MULTI_ON) currentFaceState = "multiple"
+				else currentFaceState = rawState === "none" ? "single" : rawState
+			} else {
+				if (consecutiveFramesRef.current.multipleFaces <= MULTI_OFF) currentFaceState = rawState === "multiple" ? "multiple" : "single"
+			}
+			if (currentFaceState !== "none") {
+				if (consecutiveFramesRef.current.noFace >= NONE_ON) currentFaceState = "none"
+			} else if (consecutiveFramesRef.current.noFace <= NONE_OFF) {
+				currentFaceState = rawState === "none" ? "none" : "single"
+			}
 
 			if (currentFaceState === "multiple") {
 				if (lastFaceStateRef.current !== "multiple") {
@@ -351,11 +391,8 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					if (!incidentRef.current.multipleFaces) {
 						incidentRef.current.multipleFaces = true
 						onAddEvent?.({ eventType: "face_detection", severity: "warning", context: "coding", data: { reason: "multiple_faces", count: faces.length }, timestamp: now })
-						// Immediate snapshot on multiple faces
 						const img = captureCurrentFrame(0.85)
-						if (img) {
-							appendSnapshot({ timestamp: now, type: "violation_trigger", image: img, context: "Multiple faces detected" })
-						}
+						if (img) appendSnapshot({ timestamp: now, type: "violation_trigger", image: img, context: "Multiple faces detected" })
 					}
 				}
 			} else {
@@ -374,11 +411,8 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					if (!incidentRef.current.noFace) {
 						incidentRef.current.noFace = true
 						onAddEvent?.({ eventType: "face_detection", severity: "critical", context: "coding", data: { reason: "no_face" }, timestamp: now })
-						// Immediate snapshot on no face
 						const img = captureCurrentFrame(0.85)
-						if (img) {
-							appendSnapshot({ timestamp: now, type: "violation_trigger", image: img, context: "No face detected" })
-						}
+						if (img) appendSnapshot({ timestamp: now, type: "violation_trigger", image: img, context: "No face detected" })
 					}
 				}
 			} else {
@@ -450,8 +484,12 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 							confidence: Math.min(1, 0.6 + 0.4 * headPose.confidence),
 						}
 					}
-					const expression = analyzeExpression(faceRegion, face)
-					const attire = analyzeAttire(faceRegion, fullFrame)
+					let expression: ExpressionAnalysis | null = null
+					if (emotionAnalyzerRef.current) {
+						const res = emotionAnalyzerRef.current.analyze(faceRegion, { landmarks: face.landmarks as any, headPose: headPose ?? null })
+						expression = { dominant: res.dominant, confidence: res.confidence, emotions: res.emotions as Record<string, number> }
+					}
+					const attire = analyzeAttire(face, fullFrame)
 					const eyeContact = analyzeEyeContact(face, canvas.width, canvas.height) // used only for gaze-off decision
 					// headPose already computed above for posture; compute if absent for gaze
 					const headPoseForGaze = headPose ?? analyzeHeadPose(face)
@@ -511,7 +549,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 			console.error("[widget] Face detection error:", e)
 		}
 		animationRef.current = requestAnimationFrame(detectFaces)
-	}, [analyzeExpression, analyzeAttire, analyzeEyeContact, analyzeGazeTracking, onStatusChange, onUpdateSession, sessionData?.snapshots, isLookingOffScreen, multipleFacesStartTime, gazeOffScreenStartTime, setFaceDetected])
+	}, [analyzeAttire, analyzeEyeContact, analyzeGazeTracking, onStatusChange, onUpdateSession, sessionData?.snapshots, isLookingOffScreen, multipleFacesStartTime, gazeOffScreenStartTime, setFaceDetected])
 
 	useEffect(() => {
 		setAudioAnomalyCount(0)
