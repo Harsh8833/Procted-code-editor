@@ -1,871 +1,1209 @@
-import ut, { useState as m, useRef as E, useCallback as P, useEffect as ee, useMemo as dt } from "react";
-var Fe = { exports: {} }, Ce = {};
+import ht, { useState as b, useRef as P, useCallback as Y, useEffect as te, useMemo as yt } from "react";
+var ut = { exports: {} }, $e = {};
 /**
  * @license React
- * react-jsx-runtime.production.js
+ * react-jsx-runtime.production.min.js
  *
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-var Ze;
-function ft() {
-  if (Ze) return Ce;
-  Ze = 1;
-  var n = Symbol.for("react.transitional.element"), a = Symbol.for("react.fragment");
-  function r(f, u, C) {
-    var _ = null;
-    if (C !== void 0 && (_ = "" + C), u.key !== void 0 && (_ = "" + u.key), "key" in u) {
-      C = {};
-      for (var A in u)
-        A !== "key" && (C[A] = u[A]);
-    } else C = u;
-    return u = C.ref, {
-      $$typeof: n,
-      type: f,
-      key: _,
-      ref: u !== void 0 ? u : null,
-      props: C
-    };
+var dt;
+function vt() {
+  if (dt) return $e;
+  dt = 1;
+  var a = ht, l = Symbol.for("react.element"), o = Symbol.for("react.fragment"), y = Object.prototype.hasOwnProperty, x = a.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner, N = { key: !0, ref: !0, __self: !0, __source: !0 };
+  function L(j, g, q) {
+    var f, v = {}, $ = null, W = null;
+    q !== void 0 && ($ = "" + q), g.key !== void 0 && ($ = "" + g.key), g.ref !== void 0 && (W = g.ref);
+    for (f in g) y.call(g, f) && !N.hasOwnProperty(f) && (v[f] = g[f]);
+    if (j && j.defaultProps) for (f in g = j.defaultProps, g) v[f] === void 0 && (v[f] = g[f]);
+    return { $$typeof: l, type: j, key: $, ref: W, props: v, _owner: x.current };
   }
-  return Ce.Fragment = a, Ce.jsx = r, Ce.jsxs = r, Ce;
+  return $e.Fragment = o, $e.jsx = L, $e.jsxs = L, $e;
 }
-var Ae = {};
+var Be = {};
 /**
  * @license React
  * react-jsx-runtime.development.js
  *
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-var Qe;
-function mt() {
-  return Qe || (Qe = 1, process.env.NODE_ENV !== "production" && function() {
-    function n(t) {
-      if (t == null) return null;
-      if (typeof t == "function")
-        return t.$$typeof === $ ? null : t.displayName || t.name || null;
-      if (typeof t == "string") return t;
-      switch (t) {
-        case N:
-          return "Fragment";
-        case L:
-          return "Profiler";
-        case B:
-          return "StrictMode";
-        case J:
-          return "Suspense";
-        case oe:
-          return "SuspenseList";
-        case K:
-          return "Activity";
+var ft;
+function wt() {
+  return ft || (ft = 1, process.env.NODE_ENV !== "production" && function() {
+    var a = ht, l = Symbol.for("react.element"), o = Symbol.for("react.portal"), y = Symbol.for("react.fragment"), x = Symbol.for("react.strict_mode"), N = Symbol.for("react.profiler"), L = Symbol.for("react.provider"), j = Symbol.for("react.context"), g = Symbol.for("react.forward_ref"), q = Symbol.for("react.suspense"), f = Symbol.for("react.suspense_list"), v = Symbol.for("react.memo"), $ = Symbol.for("react.lazy"), W = Symbol.for("react.offscreen"), V = Symbol.iterator, G = "@@iterator";
+    function Q(e) {
+      if (e === null || typeof e != "object")
+        return null;
+      var t = V && e[V] || e[G];
+      return typeof t == "function" ? t : null;
+    }
+    var B = a.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+    function D(e) {
+      {
+        for (var t = arguments.length, r = new Array(t > 1 ? t - 1 : 0), u = 1; u < t; u++)
+          r[u - 1] = arguments[u];
+        H("error", e, r);
       }
-      if (typeof t == "object")
-        switch (typeof t.tag == "number" && console.error(
-          "Received an unexpected object in getComponentNameFromType(). This is likely a bug in React. Please file an issue."
-        ), t.$$typeof) {
-          case M:
-            return "Portal";
-          case te:
-            return (t.displayName || "Context") + ".Provider";
-          case X:
-            return (t._context.displayName || "Context") + ".Consumer";
-          case U:
-            var d = t.render;
-            return t = t.displayName, t || (t = d.displayName || d.name || "", t = t !== "" ? "ForwardRef(" + t + ")" : "ForwardRef"), t;
+    }
+    function H(e, t, r) {
+      {
+        var u = B.ReactDebugCurrentFrame, S = u.getStackAddendum();
+        S !== "" && (t += "%s", r = r.concat([S]));
+        var E = r.map(function(c) {
+          return String(c);
+        });
+        E.unshift("Warning: " + t), Function.prototype.apply.call(console[e], console, E);
+      }
+    }
+    var ne = !1, de = !1, fe = !1, A = !1, M = !1, X;
+    X = Symbol.for("react.module.reference");
+    function F(e) {
+      return !!(typeof e == "string" || typeof e == "function" || e === y || e === N || M || e === x || e === q || e === f || A || e === W || ne || de || fe || typeof e == "object" && e !== null && (e.$$typeof === $ || e.$$typeof === v || e.$$typeof === L || e.$$typeof === j || e.$$typeof === g || // This needs to include all possible module reference object
+      // types supported by any Flight configuration anywhere since
+      // we don't know which Flight build this will end up being used
+      // with.
+      e.$$typeof === X || e.getModuleId !== void 0));
+    }
+    function he(e, t, r) {
+      var u = e.displayName;
+      if (u)
+        return u;
+      var S = t.displayName || t.name || "";
+      return S !== "" ? r + "(" + S + ")" : r;
+    }
+    function _e(e) {
+      return e.displayName || "Context";
+    }
+    function ee(e) {
+      if (e == null)
+        return null;
+      if (typeof e.tag == "number" && D("Received an unexpected object in getComponentNameFromType(). This is likely a bug in React. Please file an issue."), typeof e == "function")
+        return e.displayName || e.name || null;
+      if (typeof e == "string")
+        return e;
+      switch (e) {
+        case y:
+          return "Fragment";
+        case o:
+          return "Portal";
+        case N:
+          return "Profiler";
+        case x:
+          return "StrictMode";
+        case q:
+          return "Suspense";
+        case f:
+          return "SuspenseList";
+      }
+      if (typeof e == "object")
+        switch (e.$$typeof) {
+          case j:
+            var t = e;
+            return _e(t) + ".Consumer";
+          case L:
+            var r = e;
+            return _e(r._context) + ".Provider";
+          case g:
+            return he(e, e.render, "ForwardRef");
           case v:
-            return d = t.displayName || null, d !== null ? d : n(t.type) || "Memo";
-          case x:
-            d = t._payload, t = t._init;
+            var u = e.displayName || null;
+            return u !== null ? u : ee(e.type) || "Memo";
+          case $: {
+            var S = e, E = S._payload, c = S._init;
             try {
-              return n(t(d));
+              return ee(c(E));
             } catch {
+              return null;
             }
+          }
         }
       return null;
     }
-    function a(t) {
-      return "" + t;
+    var re = Object.assign, ie = 0, we, be, ke, xe, Te, pe, n;
+    function s() {
     }
-    function r(t) {
+    s.__reactDisabledLog = !0;
+    function d() {
+      {
+        if (ie === 0) {
+          we = console.log, be = console.info, ke = console.warn, xe = console.error, Te = console.group, pe = console.groupCollapsed, n = console.groupEnd;
+          var e = {
+            configurable: !0,
+            enumerable: !0,
+            value: s,
+            writable: !0
+          };
+          Object.defineProperties(console, {
+            info: e,
+            log: e,
+            warn: e,
+            error: e,
+            group: e,
+            groupCollapsed: e,
+            groupEnd: e
+          });
+        }
+        ie++;
+      }
+    }
+    function I() {
+      {
+        if (ie--, ie === 0) {
+          var e = {
+            configurable: !0,
+            enumerable: !0,
+            writable: !0
+          };
+          Object.defineProperties(console, {
+            log: re({}, e, {
+              value: we
+            }),
+            info: re({}, e, {
+              value: be
+            }),
+            warn: re({}, e, {
+              value: ke
+            }),
+            error: re({}, e, {
+              value: xe
+            }),
+            group: re({}, e, {
+              value: Te
+            }),
+            groupCollapsed: re({}, e, {
+              value: pe
+            }),
+            groupEnd: re({}, e, {
+              value: n
+            })
+          });
+        }
+        ie < 0 && D("disabledDepth fell below zero. This is a bug in React. Please file an issue.");
+      }
+    }
+    var T = B.ReactCurrentDispatcher, K;
+    function oe(e, t, r) {
+      {
+        if (K === void 0)
+          try {
+            throw Error();
+          } catch (S) {
+            var u = S.stack.trim().match(/\n( *(at )?)/);
+            K = u && u[1] || "";
+          }
+        return `
+` + K + e;
+      }
+    }
+    var se = !1, je;
+    {
+      var lt = typeof WeakMap == "function" ? WeakMap : Map;
+      je = new lt();
+    }
+    function Ae(e, t) {
+      if (!e || se)
+        return "";
+      {
+        var r = je.get(e);
+        if (r !== void 0)
+          return r;
+      }
+      var u;
+      se = !0;
+      var S = Error.prepareStackTrace;
+      Error.prepareStackTrace = void 0;
+      var E;
+      E = T.current, T.current = null, d();
       try {
-        a(t);
-        var d = !1;
-      } catch {
-        d = !0;
+        if (t) {
+          var c = function() {
+            throw Error();
+          };
+          if (Object.defineProperty(c.prototype, "props", {
+            set: function() {
+              throw Error();
+            }
+          }), typeof Reflect == "object" && Reflect.construct) {
+            try {
+              Reflect.construct(c, []);
+            } catch (Z) {
+              u = Z;
+            }
+            Reflect.construct(e, [], c);
+          } else {
+            try {
+              c.call();
+            } catch (Z) {
+              u = Z;
+            }
+            e.call(c.prototype);
+          }
+        } else {
+          try {
+            throw Error();
+          } catch (Z) {
+            u = Z;
+          }
+          e();
+        }
+      } catch (Z) {
+        if (Z && u && typeof Z.stack == "string") {
+          for (var h = Z.stack.split(`
+`), z = u.stack.split(`
+`), _ = h.length - 1, C = z.length - 1; _ >= 1 && C >= 0 && h[_] !== z[C]; )
+            C--;
+          for (; _ >= 1 && C >= 0; _--, C--)
+            if (h[_] !== z[C]) {
+              if (_ !== 1 || C !== 1)
+                do
+                  if (_--, C--, C < 0 || h[_] !== z[C]) {
+                    var U = `
+` + h[_].replace(" at new ", " at ");
+                    return e.displayName && U.includes("<anonymous>") && (U = U.replace("<anonymous>", e.displayName)), typeof e == "function" && je.set(e, U), U;
+                  }
+                while (_ >= 1 && C >= 0);
+              break;
+            }
+        }
+      } finally {
+        se = !1, T.current = E, I(), Error.prepareStackTrace = S;
       }
-      if (d) {
-        d = console;
-        var k = d.error, j = typeof Symbol == "function" && Symbol.toStringTag && t[Symbol.toStringTag] || t.constructor.name || "Object";
-        return k.call(
-          d,
-          "The provided key is an unsupported type %s. This value must be coerced to a string before using it here.",
-          j
-        ), a(t);
+      var ve = e ? e.displayName || e.name : "", Re = ve ? oe(ve) : "";
+      return typeof e == "function" && je.set(e, Re), Re;
+    }
+    function Ye(e, t, r) {
+      return Ae(e, !1);
+    }
+    function rt(e) {
+      var t = e.prototype;
+      return !!(t && t.isReactComponent);
+    }
+    function Se(e, t, r) {
+      if (e == null)
+        return "";
+      if (typeof e == "function")
+        return Ae(e, rt(e));
+      if (typeof e == "string")
+        return oe(e);
+      switch (e) {
+        case q:
+          return oe("Suspense");
+        case f:
+          return oe("SuspenseList");
+      }
+      if (typeof e == "object")
+        switch (e.$$typeof) {
+          case g:
+            return Ye(e.render);
+          case v:
+            return Se(e.type, t, r);
+          case $: {
+            var u = e, S = u._payload, E = u._init;
+            try {
+              return Se(E(S), t, r);
+            } catch {
+            }
+          }
+        }
+      return "";
+    }
+    var me = Object.prototype.hasOwnProperty, Fe = {}, qe = B.ReactDebugCurrentFrame;
+    function Oe(e) {
+      if (e) {
+        var t = e._owner, r = Se(e.type, e._source, t ? t.type : null);
+        qe.setExtraStackFrame(r);
+      } else
+        qe.setExtraStackFrame(null);
+    }
+    function ot(e, t, r, u, S) {
+      {
+        var E = Function.call.bind(me);
+        for (var c in e)
+          if (E(e, c)) {
+            var h = void 0;
+            try {
+              if (typeof e[c] != "function") {
+                var z = Error((u || "React class") + ": " + r + " type `" + c + "` is invalid; it must be a function, usually from the `prop-types` package, but received `" + typeof e[c] + "`.This often happens because of typos such as `PropTypes.function` instead of `PropTypes.func`.");
+                throw z.name = "Invariant Violation", z;
+              }
+              h = e[c](t, c, u, r, null, "SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED");
+            } catch (_) {
+              h = _;
+            }
+            h && !(h instanceof Error) && (Oe(S), D("%s: type specification of %s `%s` is invalid; the type checker function must return `null` or an `Error` but returned a %s. You may have forgotten to pass an argument to the type checker creator (arrayOf, instanceOf, objectOf, oneOf, oneOfType, and shape all require an argument).", u || "React class", r, c, typeof h), Oe(null)), h instanceof Error && !(h.message in Fe) && (Fe[h.message] = !0, Oe(S), D("Failed %s type: %s", r, h.message), Oe(null));
+          }
       }
     }
-    function f(t) {
-      if (t === N) return "<>";
-      if (typeof t == "object" && t !== null && t.$$typeof === x)
-        return "<...>";
+    var ce = Array.isArray;
+    function Ee(e) {
+      return ce(e);
+    }
+    function Ue(e) {
+      {
+        var t = typeof Symbol == "function" && Symbol.toStringTag, r = t && e[Symbol.toStringTag] || e.constructor.name || "Object";
+        return r;
+      }
+    }
+    function Me(e) {
       try {
-        var d = n(t);
-        return d ? "<" + d + ">" : "<...>";
+        return ue(e), !1;
       } catch {
-        return "<...>";
+        return !0;
       }
     }
-    function u() {
-      var t = se.A;
-      return t === null ? null : t.getOwner();
+    function ue(e) {
+      return "" + e;
     }
-    function C() {
-      return Error("react-stack-top-frame");
+    function Ce(e) {
+      if (Me(e))
+        return D("The provided key is an unsupported type %s. This value must be coerced to a string before before using it here.", Ue(e)), ue(e);
     }
-    function _(t) {
-      if (ue.call(t, "key")) {
-        var d = Object.getOwnPropertyDescriptor(t, "key").get;
-        if (d && d.isReactWarning) return !1;
+    var Ve = B.ReactCurrentOwner, Ge = {
+      key: !0,
+      ref: !0,
+      __self: !0,
+      __source: !0
+    }, Pe, ge;
+    function ae(e) {
+      if (me.call(e, "ref")) {
+        var t = Object.getOwnPropertyDescriptor(e, "ref").get;
+        if (t && t.isReactWarning)
+          return !1;
       }
-      return t.key !== void 0;
+      return e.ref !== void 0;
     }
-    function A(t, d) {
-      function k() {
-        fe || (fe = !0, console.error(
-          "%s: `key` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://react.dev/link/special-props)",
-          d
-        ));
+    function Ke(e) {
+      if (me.call(e, "key")) {
+        var t = Object.getOwnPropertyDescriptor(e, "key").get;
+        if (t && t.isReactWarning)
+          return !1;
       }
-      k.isReactWarning = !0, Object.defineProperty(t, "key", {
-        get: k,
-        configurable: !0
-      });
+      return e.key !== void 0;
     }
-    function w() {
-      var t = n(this.type);
-      return F[t] || (F[t] = !0, console.error(
-        "Accessing element.ref was removed in React 19. ref is now a regular prop. It will be removed from the JSX Element type in a future release."
-      )), t = this.props.ref, t !== void 0 ? t : null;
+    function Je(e, t) {
+      typeof e.ref == "string" && Ve.current;
     }
-    function H(t, d, k, j, V, W, ce, ne) {
-      return k = W.ref, t = {
-        $$typeof: q,
-        type: t,
-        key: d,
-        props: W,
-        _owner: V
-      }, (k !== void 0 ? k : null) !== null ? Object.defineProperty(t, "ref", {
-        enumerable: !1,
-        get: w
-      }) : Object.defineProperty(t, "ref", { enumerable: !1, value: null }), t._store = {}, Object.defineProperty(t._store, "validated", {
-        configurable: !1,
-        enumerable: !1,
-        writable: !0,
-        value: 0
-      }), Object.defineProperty(t, "_debugInfo", {
-        configurable: !1,
-        enumerable: !1,
-        writable: !0,
-        value: null
-      }), Object.defineProperty(t, "_debugStack", {
-        configurable: !1,
-        enumerable: !1,
-        writable: !0,
-        value: ce
-      }), Object.defineProperty(t, "_debugTask", {
-        configurable: !1,
-        enumerable: !1,
-        writable: !0,
-        value: ne
-      }), Object.freeze && (Object.freeze(t.props), Object.freeze(t)), t;
-    }
-    function p(t, d, k, j, V, W, ce, ne) {
-      var e = d.children;
-      if (e !== void 0)
-        if (j)
-          if (ye(e)) {
-            for (j = 0; j < e.length; j++)
-              g(e[j]);
-            Object.freeze && Object.freeze(e);
-          } else
-            console.error(
-              "React.jsx: Static children should always be an array. You are likely explicitly calling React.jsxs or React.jsxDEV. Use the Babel transform instead."
-            );
-        else g(e);
-      if (ue.call(d, "key")) {
-        e = n(t);
-        var s = Object.keys(d).filter(function(O) {
-          return O !== "key";
+    function at(e, t) {
+      {
+        var r = function() {
+          Pe || (Pe = !0, D("%s: `key` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://reactjs.org/link/special-props)", t));
+        };
+        r.isReactWarning = !0, Object.defineProperty(e, "key", {
+          get: r,
+          configurable: !0
         });
-        j = 0 < s.length ? "{key: someKey, " + s.join(": ..., ") + ": ...}" : "{key: someKey}", me[e + j] || (s = 0 < s.length ? "{" + s.join(": ..., ") + ": ...}" : "{}", console.error(
-          `A props object containing a "key" prop is being spread into JSX:
+      }
+    }
+    function it(e, t) {
+      {
+        var r = function() {
+          ge || (ge = !0, D("%s: `ref` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://reactjs.org/link/special-props)", t));
+        };
+        r.isReactWarning = !0, Object.defineProperty(e, "ref", {
+          get: r,
+          configurable: !0
+        });
+      }
+    }
+    var He = function(e, t, r, u, S, E, c) {
+      var h = {
+        // This tag allows us to uniquely identify this as a React Element
+        $$typeof: l,
+        // Built-in properties that belong on the element
+        type: e,
+        key: t,
+        ref: r,
+        props: c,
+        // Record the component responsible for creating this element.
+        _owner: E
+      };
+      return h._store = {}, Object.defineProperty(h._store, "validated", {
+        configurable: !1,
+        enumerable: !1,
+        writable: !0,
+        value: !1
+      }), Object.defineProperty(h, "_self", {
+        configurable: !1,
+        enumerable: !1,
+        writable: !1,
+        value: u
+      }), Object.defineProperty(h, "_source", {
+        configurable: !1,
+        enumerable: !1,
+        writable: !1,
+        value: S
+      }), Object.freeze && (Object.freeze(h.props), Object.freeze(h)), h;
+    };
+    function Xe(e, t, r, u, S) {
+      {
+        var E, c = {}, h = null, z = null;
+        r !== void 0 && (Ce(r), h = "" + r), Ke(t) && (Ce(t.key), h = "" + t.key), ae(t) && (z = t.ref, Je(t, S));
+        for (E in t)
+          me.call(t, E) && !Ge.hasOwnProperty(E) && (c[E] = t[E]);
+        if (e && e.defaultProps) {
+          var _ = e.defaultProps;
+          for (E in _)
+            c[E] === void 0 && (c[E] = _[E]);
+        }
+        if (h || z) {
+          var C = typeof e == "function" ? e.displayName || e.name || "Unknown" : e;
+          h && at(c, C), z && it(c, C);
+        }
+        return He(e, h, z, S, u, Ve.current, c);
+      }
+    }
+    var De = B.ReactCurrentOwner, Ie = B.ReactDebugCurrentFrame;
+    function le(e) {
+      if (e) {
+        var t = e._owner, r = Se(e.type, e._source, t ? t.type : null);
+        Ie.setExtraStackFrame(r);
+      } else
+        Ie.setExtraStackFrame(null);
+    }
+    var ze;
+    ze = !1;
+    function ye(e) {
+      return typeof e == "object" && e !== null && e.$$typeof === l;
+    }
+    function Ze() {
+      {
+        if (De.current) {
+          var e = ee(De.current.type);
+          if (e)
+            return `
+
+Check the render method of \`` + e + "`.";
+        }
+        return "";
+      }
+    }
+    function Qe(e) {
+      return "";
+    }
+    var Le = {};
+    function et(e) {
+      {
+        var t = Ze();
+        if (!t) {
+          var r = typeof e == "string" ? e : e.displayName || e.name;
+          r && (t = `
+
+Check the top-level render call using <` + r + ">.");
+        }
+        return t;
+      }
+    }
+    function We(e, t) {
+      {
+        if (!e._store || e._store.validated || e.key != null)
+          return;
+        e._store.validated = !0;
+        var r = et(t);
+        if (Le[r])
+          return;
+        Le[r] = !0;
+        var u = "";
+        e && e._owner && e._owner !== De.current && (u = " It was passed a child from " + ee(e._owner.type) + "."), le(e), D('Each child in a list should have a unique "key" prop.%s%s See https://reactjs.org/link/warning-keys for more information.', r, u), le(null);
+      }
+    }
+    function Ne(e, t) {
+      {
+        if (typeof e != "object")
+          return;
+        if (Ee(e))
+          for (var r = 0; r < e.length; r++) {
+            var u = e[r];
+            ye(u) && We(u, t);
+          }
+        else if (ye(e))
+          e._store && (e._store.validated = !0);
+        else if (e) {
+          var S = Q(e);
+          if (typeof S == "function" && S !== e.entries)
+            for (var E = S.call(e), c; !(c = E.next()).done; )
+              ye(c.value) && We(c.value, t);
+        }
+      }
+    }
+    function st(e) {
+      {
+        var t = e.type;
+        if (t == null || typeof t == "string")
+          return;
+        var r;
+        if (typeof t == "function")
+          r = t.propTypes;
+        else if (typeof t == "object" && (t.$$typeof === g || // Note: Memo only checks outer props here.
+        // Inner props are checked in the reconciler.
+        t.$$typeof === v))
+          r = t.propTypes;
+        else
+          return;
+        if (r) {
+          var u = ee(t);
+          ot(r, e.props, "prop", u, e);
+        } else if (t.PropTypes !== void 0 && !ze) {
+          ze = !0;
+          var S = ee(t);
+          D("Component %s declared `PropTypes` instead of `propTypes`. Did you misspell the property assignment?", S || "Unknown");
+        }
+        typeof t.getDefaultProps == "function" && !t.getDefaultProps.isReactClassApproved && D("getDefaultProps is only used on classic React.createClass definitions. Use a static property named `defaultProps` instead.");
+      }
+    }
+    function p(e) {
+      {
+        for (var t = Object.keys(e.props), r = 0; r < t.length; r++) {
+          var u = t[r];
+          if (u !== "children" && u !== "key") {
+            le(e), D("Invalid prop `%s` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.", u), le(null);
+            break;
+          }
+        }
+        e.ref !== null && (le(e), D("Invalid attribute `ref` supplied to `React.Fragment`."), le(null));
+      }
+    }
+    var m = {};
+    function w(e, t, r, u, S, E) {
+      {
+        var c = F(e);
+        if (!c) {
+          var h = "";
+          (e === void 0 || typeof e == "object" && e !== null && Object.keys(e).length === 0) && (h += " You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.");
+          var z = Qe();
+          z ? h += z : h += Ze();
+          var _;
+          e === null ? _ = "null" : Ee(e) ? _ = "array" : e !== void 0 && e.$$typeof === l ? (_ = "<" + (ee(e.type) || "Unknown") + " />", h = " Did you accidentally export a JSX literal instead of a component?") : _ = typeof e, D("React.jsx: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s", _, h);
+        }
+        var C = Xe(e, t, r, S, E);
+        if (C == null)
+          return C;
+        if (c) {
+          var U = t.children;
+          if (U !== void 0)
+            if (u)
+              if (Ee(U)) {
+                for (var ve = 0; ve < U.length; ve++)
+                  Ne(U[ve], e);
+                Object.freeze && Object.freeze(U);
+              } else
+                D("React.jsx: Static children should always be an array. You are likely explicitly calling React.jsxs or React.jsxDEV. Use the Babel transform instead.");
+            else
+              Ne(U, e);
+        }
+        if (me.call(t, "key")) {
+          var Re = ee(e), Z = Object.keys(t).filter(function(gt) {
+            return gt !== "key";
+          }), ct = Z.length > 0 ? "{key: someKey, " + Z.join(": ..., ") + ": ...}" : "{key: someKey}";
+          if (!m[Re + ct]) {
+            var mt = Z.length > 0 ? "{" + Z.join(": ..., ") + ": ...}" : "{}";
+            D(`A props object containing a "key" prop is being spread into JSX:
   let props = %s;
   <%s {...props} />
 React keys must be passed directly to JSX without using spread:
   let props = %s;
-  <%s key={someKey} {...props} />`,
-          j,
-          e,
-          s,
-          e
-        ), me[e + j] = !0);
+  <%s key={someKey} {...props} />`, ct, Re, mt, Re), m[Re + ct] = !0;
+          }
+        }
+        return e === y ? p(C) : st(C), C;
       }
-      if (e = null, k !== void 0 && (r(k), e = "" + k), _(d) && (r(d.key), e = "" + d.key), "key" in d) {
-        k = {};
-        for (var i in d)
-          i !== "key" && (k[i] = d[i]);
-      } else k = d;
-      return e && A(
-        k,
-        typeof t == "function" ? t.displayName || t.name || "Unknown" : t
-      ), H(
-        t,
-        e,
-        W,
-        V,
-        u(),
-        k,
-        ce,
-        ne
-      );
     }
-    function g(t) {
-      typeof t == "object" && t !== null && t.$$typeof === q && t._store && (t._store.validated = 1);
+    function R(e, t, r) {
+      return w(e, t, r, !0);
     }
-    var z = ut, q = Symbol.for("react.transitional.element"), M = Symbol.for("react.portal"), N = Symbol.for("react.fragment"), B = Symbol.for("react.strict_mode"), L = Symbol.for("react.profiler"), X = Symbol.for("react.consumer"), te = Symbol.for("react.context"), U = Symbol.for("react.forward_ref"), J = Symbol.for("react.suspense"), oe = Symbol.for("react.suspense_list"), v = Symbol.for("react.memo"), x = Symbol.for("react.lazy"), K = Symbol.for("react.activity"), $ = Symbol.for("react.client.reference"), se = z.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, ue = Object.prototype.hasOwnProperty, ye = Array.isArray, de = console.createTask ? console.createTask : function() {
-      return null;
-    };
-    z = {
-      react_stack_bottom_frame: function(t) {
-        return t();
-      }
-    };
-    var fe, F = {}, we = z.react_stack_bottom_frame.bind(
-      z,
-      C
-    )(), ve = de(f(C)), me = {};
-    Ae.Fragment = N, Ae.jsx = function(t, d, k, j, V) {
-      var W = 1e4 > se.recentlyCreatedOwnerStacks++;
-      return p(
-        t,
-        d,
-        k,
-        !1,
-        j,
-        V,
-        W ? Error("react-stack-top-frame") : we,
-        W ? de(f(t)) : ve
-      );
-    }, Ae.jsxs = function(t, d, k, j, V) {
-      var W = 1e4 > se.recentlyCreatedOwnerStacks++;
-      return p(
-        t,
-        d,
-        k,
-        !0,
-        j,
-        V,
-        W ? Error("react-stack-top-frame") : we,
-        W ? de(f(t)) : ve
-      );
-    };
-  }()), Ae;
+    function O(e, t, r) {
+      return w(e, t, r, !1);
+    }
+    var J = O, k = R;
+    Be.Fragment = y, Be.jsx = J, Be.jsxs = k;
+  }()), Be;
 }
-process.env.NODE_ENV === "production" ? Fe.exports = ft() : Fe.exports = mt();
-var o = Fe.exports;
-function et(n) {
-  const a = window.AudioContext || window.webkitAudioContext, r = new a(), f = r.createMediaStreamSource(n), u = r.createAnalyser();
-  u.fftSize = 2048, u.smoothingTimeConstant = 0.85, f.connect(u);
-  const C = new Uint8Array(u.fftSize);
-  function _() {
-    u.getByteTimeDomainData(C);
-    let A = 0;
-    for (let w = 0; w < C.length; w++) {
-      const H = (C[w] - 128) / 128;
-      A += H * H;
+process.env.NODE_ENV === "production" ? ut.exports = vt() : ut.exports = wt();
+var i = ut.exports;
+function pt(a) {
+  const l = window.AudioContext || window.webkitAudioContext, o = new l(), y = o.createMediaStreamSource(a), x = o.createAnalyser();
+  x.fftSize = 2048, x.smoothingTimeConstant = 0.85, y.connect(x);
+  const N = new Uint8Array(x.fftSize);
+  function L() {
+    x.getByteTimeDomainData(N);
+    let j = 0;
+    for (let g = 0; g < N.length; g++) {
+      const q = (N[g] - 128) / 128;
+      j += q * q;
     }
-    return Math.sqrt(A / C.length);
+    return Math.sqrt(j / N.length);
   }
   return {
-    getLevel: () => _(),
+    getLevel: () => L(),
     dispose: async () => {
       try {
-        f.disconnect();
+        y.disconnect();
       } catch {
       }
       try {
-        u.disconnect();
+        x.disconnect();
       } catch {
       }
       try {
-        await r.close();
+        await o.close();
       } catch {
       }
     }
   };
 }
-let je = null;
-async function ht() {
-  if (je) return je;
-  const n = await import("./blazeface.esm-D5KORnOe.js"), a = await import("./index-2kM27Pi_.js");
-  return a.ready && await a.ready(), je = await n.load(), je;
+let tt = null;
+async function bt() {
+  if (tt) return tt;
+  const a = await import("./blazeface.esm-D5KORnOe.js"), l = await import("./index-2kM27Pi_.js");
+  return l.ready && await l.ready(), tt = await a.load(), tt;
 }
-async function pt(n) {
+async function xt(a) {
   if ("FaceDetector" in window)
     try {
-      const r = await new window.FaceDetector({ fastMode: !0, maxDetectedFaces: 1 }).detect(n);
-      return r && r.length > 0 ? { present: !0, confidence: 0.8 } : { present: !1, confidence: 0 };
+      const o = await new window.FaceDetector({ fastMode: !0, maxDetectedFaces: 1 }).detect(a);
+      return o && o.length > 0 ? { present: !0, confidence: 0.8 } : { present: !1, confidence: 0 };
     } catch {
     }
   try {
-    const r = await (await ht()).estimateFaces(n, !1);
-    if (r && r.length > 0) {
-      const f = r[0].probability ? r[0].probability[0] : 0.7;
-      return { present: !0, confidence: Math.max(0.5, Math.min(1, f)) };
+    const o = await (await bt()).estimateFaces(a, !1);
+    if (o && o.length > 0) {
+      const y = o[0].probability ? o[0].probability[0] : 0.7;
+      return { present: !0, confidence: Math.max(0.5, Math.min(1, y)) };
     }
   } catch {
   }
   return { present: !1, confidence: 0 };
 }
-function gt({ onComplete: n, onError: a }) {
-  const r = ["camera", "microphone", "face", "monitor", "browser"], [f, u] = m({
+function St({ onComplete: a, onError: l }) {
+  const o = ["camera", "microphone", "face", "monitor", "browser"], [y, x] = b({
     camera: "pending",
     microphone: "pending",
     face: "pending",
     monitor: "pending",
     browser: "pending"
-  }), [C, _] = m(0), [A, w] = m(0), [H, p] = m(!1), [g, z] = m(null), [q, M] = m({}), [N, B] = m({}), L = E(null), X = E(null), te = E(null), U = E(null), J = E(null), oe = E(null), v = E(null), x = () => {
+  }), [N, L] = b(0), [j, g] = b(0), [q, f] = b({}), [v, $] = b(!1), [W, V] = b({}), G = P(null), Q = P(null), B = P(null), D = P(null), H = P(null), ne = () => {
     try {
-      L.current?.getTracks().forEach((e) => e.stop());
+      G.current?.getTracks().forEach((n) => n.stop());
     } catch {
     }
     try {
-      X.current?.getTracks().forEach((e) => e.stop());
+      Q.current?.getTracks().forEach((n) => n.stop());
     } catch {
     }
-    L.current = null, X.current = null, te.current && (te.current.dispose().catch(() => {
-    }), te.current = null), U.current && (cancelAnimationFrame(U.current), U.current = null);
-  }, K = async (e) => {
+    G.current = null, Q.current = null, B.current && (B.current.dispose().catch(() => {
+    }), B.current = null), D.current && (cancelAnimationFrame(D.current), D.current = null);
+  }, de = async (n) => {
     try {
       const s = window.AudioContext || window.webkitAudioContext;
       if (!s) throw new Error("AudioContext not supported");
-      const i = new s(), O = i.createMediaStreamSource(e), D = i.createAnalyser();
-      D.fftSize = 256, D.smoothingTimeConstant = 0.8, O.connect(D);
-      const be = new Uint8Array(D.frequencyBinCount);
-      D.getByteFrequencyData(be), sessionStorage.setItem("audio-context-initialized", "true"), O.disconnect(), await i.close(), typeof window < "u" && (window.precheckAudioStream = e);
+      const d = new s(), I = d.createMediaStreamSource(n), T = d.createAnalyser();
+      T.fftSize = 256, T.smoothingTimeConstant = 0.8, I.connect(T);
+      const K = new Uint8Array(T.frequencyBinCount);
+      T.getByteFrequencyData(K), sessionStorage.setItem("audio-context-initialized", "true"), I.disconnect(), await d.close(), typeof window < "u" && (window.precheckAudioStream = n);
     } catch {
       sessionStorage.setItem("audio-context-initialized", "false");
     }
-  }, $ = async (e) => {
-    const s = J.current;
-    let i = 0, O = 0, D = 0;
-    const be = 30;
-    for (; D < be && i < 5; ) {
+  }, fe = async (n) => {
+    const s = H.current;
+    let d = 0, I = 0, T = 0;
+    const K = 30;
+    for (; T < K && d < 5; ) {
       try {
-        const he = await pt(s);
-        he.present && (i += 1, O = Math.max(O, he.confidence));
+        const se = await xt(s);
+        se.present && (d += 1, I = Math.max(I, se.confidence));
       } catch {
       }
-      D++, _(D), await new Promise((he) => setTimeout(he, 100));
+      T++, L(T), await new Promise((se) => setTimeout(se, 100));
     }
-    return { status: i >= 5, confidence: O, timestamp: Date.now() };
-  }, se = async () => {
+    return { status: d >= 5, confidence: I, timestamp: Date.now() };
+  }, A = () => {
     try {
-      return "permissions" in navigator ? (await navigator.permissions.query({ name: "window-management" })).state : "unsupported";
-    } catch {
-      return "unsupported";
-    }
-  }, ue = () => {
-    try {
-      const e = window.screen.width, s = window.screen.height, i = window.screen.availWidth;
-      return e / s > 3 || e > i * 1.5 || [3840, 3360, 2560, 4480, 5120].includes(e) ? 2 : 1;
+      const n = window.screen.width, s = window.screen.height, d = window.screen.availWidth;
+      return n / s > 3 || n > d * 1.5 || [3840, 3360, 2560, 4480, 5120].includes(n) ? 2 : 1;
     } catch {
       return 1;
     }
-  }, ye = async () => {
+  }, M = async () => {
     try {
-      if ("getScreenDetails" in window) {
-        const e = await window.getScreenDetails();
-        v.current = e.screens.length;
-      } else
-        v.current = null;
-    } catch {
-      v.current = null;
-    } finally {
-      oe.current?.(!0), oe.current = null, p(!1);
-    }
-  }, de = async () => {
-    try {
-      if (!window.isSecureContext) return ue();
-      if ("permissions" in navigator)
+      if (!window.isSecureContext) return A();
+      if ("getScreenDetails" in window)
         try {
-          const e = await navigator.permissions.query({ name: "window-management" });
-          if (z(e.state), e.state === "granted") {
-            if ("getScreenDetails" in window)
-              return (await window.getScreenDetails()).screens.length;
-          } else if (e.state === "prompt" && (p(!0), await new Promise((s) => {
-            oe.current = s;
-          }), p(!1), v.current != null)) {
-            const s = v.current;
-            return v.current = null, s;
+          return (await window.getScreenDetails()).screens.length;
+        } catch (n) {
+          if (n?.name === "NotAllowedError" || n?.name === "SecurityError") {
+            $(!0);
+            try {
+              return await new Promise((I) => {
+                const T = async () => {
+                  K();
+                  try {
+                    const oe = await window.getScreenDetails();
+                    I(oe.screens.length);
+                  } catch {
+                    I(A());
+                  }
+                }, K = () => {
+                  window.removeEventListener("pointerdown", T), window.removeEventListener("keydown", T);
+                };
+                window.addEventListener("pointerdown", T, { once: !0 }), window.addEventListener("keydown", T, { once: !0 });
+              });
+            } finally {
+              $(!1);
+            }
           }
-        } catch {
         }
-      return ue();
+      return A();
     } catch {
       return 1;
     }
-  }, fe = () => [
+  }, X = () => [
     "navigator.mediaDevices",
     "navigator.mediaDevices.getUserMedia",
     "requestAnimationFrame",
     "WebAssembly"
   ].every((s) => {
-    const i = s.split(".");
-    let O = window;
-    for (const D of i) {
-      if (!(D in O)) return !1;
-      O = O[D];
+    const d = s.split(".");
+    let I = window;
+    for (const T of d) {
+      if (!(T in I)) return !1;
+      I = I[T];
     }
     return !0;
-  }), F = (e, s) => {
-    u((i) => ({ ...i, [e]: s }));
-  }, we = P(async () => {
-    F("camera", "running"), M((e) => ({ ...e, camera: "" }));
+  }), F = (n, s) => {
+    x((d) => ({ ...d, [n]: s }));
+  }, he = Y(async () => {
+    F("camera", "running"), f((n) => ({ ...n, camera: "" }));
     try {
       try {
-        L.current?.getTracks().forEach((s) => s.stop());
+        G.current?.getTracks().forEach((s) => s.stop());
       } catch {
       }
-      const e = await navigator.mediaDevices.getUserMedia({
+      const n = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }
       });
-      if (L.current = e, !J.current) {
+      if (G.current = n, !H.current) {
         const s = document.createElement("video");
-        s.muted = !0, s.playsInline = !0, J.current = s;
+        s.muted = !0, s.playsInline = !0, H.current = s;
       }
-      J.current.srcObject = e;
+      H.current.srcObject = n;
       try {
-        await J.current.play();
+        await H.current.play();
       } catch {
       }
-      return B((s) => ({ ...s, cameraAccess: !0 })), F("camera", "passed"), !0;
-    } catch (e) {
-      const s = e?.name === "NotAllowedError" ? "Camera permission denied" : e?.message || "Camera access failed";
-      return M((i) => ({ ...i, camera: s })), F("camera", "failed"), !1;
+      return V((s) => ({ ...s, cameraAccess: !0 })), F("camera", "passed"), !0;
+    } catch (n) {
+      const s = n?.name === "NotAllowedError" ? "Camera permission denied" : n?.message || "Camera access failed";
+      return f((d) => ({ ...d, camera: s })), F("camera", "failed"), !1;
     }
-  }, []), ve = P(async () => {
-    F("microphone", "running"), M((e) => ({ ...e, microphone: "" }));
+  }, []), _e = Y(async () => {
+    F("microphone", "running"), f((n) => ({ ...n, microphone: "" }));
     try {
       try {
-        X.current?.getTracks().forEach((s) => s.stop());
+        Q.current?.getTracks().forEach((s) => s.stop());
       } catch {
       }
-      const e = await navigator.mediaDevices.getUserMedia({
+      const n = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: !0, noiseSuppression: !0, autoGainControl: !0 }
       });
-      X.current = e, B((s) => ({ ...s, microphoneAccess: !0 })), await K(e);
+      Q.current = n, V((s) => ({ ...s, microphoneAccess: !0 })), await de(n);
       try {
-        const s = et(e);
-        te.current = s;
-        const i = () => {
-          w(s.getLevel()), U.current = requestAnimationFrame(i);
+        const s = pt(n);
+        B.current = s;
+        const d = () => {
+          g(s.getLevel()), D.current = requestAnimationFrame(d);
         };
-        U.current = requestAnimationFrame(i);
+        D.current = requestAnimationFrame(d);
       } catch {
       }
       return F("microphone", "passed"), !0;
-    } catch (e) {
-      const s = e?.name === "NotAllowedError" ? "Microphone permission denied" : e?.message || "Microphone access failed";
-      return M((i) => ({ ...i, microphone: s })), F("microphone", "failed"), !1;
+    } catch (n) {
+      const s = n?.name === "NotAllowedError" ? "Microphone permission denied" : n?.message || "Microphone access failed";
+      return f((d) => ({ ...d, microphone: s })), F("microphone", "failed"), !1;
     }
-  }, []), me = P(async () => {
-    F("face", "running"), M((e) => ({ ...e, face: "" }));
+  }, []), ee = Y(async () => {
+    F("face", "running"), f((n) => ({ ...n, face: "" }));
     try {
-      if (!L.current) throw new Error("Camera is not initialized");
-      const e = await $(L.current);
-      if (B((s) => ({ ...s, faceDetection: e })), e.status)
+      if (!G.current) throw new Error("Camera is not initialized");
+      const n = await fe(G.current);
+      if (V((s) => ({ ...s, faceDetection: n })), n.status)
         return F("face", "passed"), !0;
       throw new Error("No face detected. Please align your face within the frame and retry.");
-    } catch (e) {
-      const s = e?.message || "Face detection failed";
-      return M((i) => ({ ...i, face: s })), F("face", "failed"), !1;
+    } catch (n) {
+      const s = n?.message || "Face detection failed";
+      return f((d) => ({ ...d, face: s })), F("face", "failed"), !1;
     }
-  }, []), t = P(async () => {
-    F("monitor", "running"), M((e) => ({ ...e, monitor: "" }));
+  }, []), re = Y(async () => {
+    F("monitor", "running"), f((n) => ({ ...n, monitor: "" }));
     try {
-      try {
-        z(await se());
-      } catch {
-      }
-      const e = await de();
-      if (e && e >= 1)
-        return B((s) => ({ ...s, monitorCount: e })), F("monitor", "passed"), !0;
-      throw new Error("Could not verify monitors");
-    } catch (e) {
-      return M((s) => ({ ...s, monitor: e?.message || "Monitor verification failed" })), F("monitor", "failed"), !1;
+      const n = await M();
+      if (n && n > 1)
+        throw V((s) => ({ ...s, monitorCount: n })), new Error("Multiple displays detected. Please remove external screens and keep only one display connected, then press Retry.");
+      if (n === 1)
+        return V((s) => ({ ...s, monitorCount: n })), F("monitor", "passed"), !0;
+      throw new Error("Could not verify displays");
+    } catch (n) {
+      return f((s) => ({ ...s, monitor: n?.message || "Monitor verification failed" })), F("monitor", "failed"), !1;
     }
-  }, []), d = P(async () => {
-    F("browser", "running"), M((e) => ({ ...e, browser: "" }));
+  }, []), ie = Y(async () => {
+    F("browser", "running"), f((n) => ({ ...n, browser: "" }));
     try {
-      const e = fe();
-      if (B((s) => ({ ...s, browserSupport: e })), !e) throw new Error("Required browser features are unavailable");
+      const n = X();
+      if (V((s) => ({ ...s, browserSupport: n })), !n) throw new Error("Required browser features are unavailable");
       return F("browser", "passed"), !0;
-    } catch (e) {
-      return M((s) => ({ ...s, browser: e?.message || "Browser not supported" })), F("browser", "failed"), !1;
+    } catch (n) {
+      return f((s) => ({ ...s, browser: n?.message || "Browser not supported" })), F("browser", "failed"), !1;
     }
-  }, []), k = {
-    camera: we,
-    microphone: ve,
-    face: me,
-    monitor: t,
-    browser: d
-  }, j = P(async (e) => {
-    for (let s = e; s < r.length; s++) {
-      const i = r[s];
-      if (!await k[i]()) break;
+  }, []), we = {
+    camera: he,
+    microphone: _e,
+    face: ee,
+    monitor: re,
+    browser: ie
+  }, be = Y(async (n) => {
+    for (let s = n; s < o.length; s++) {
+      const d = o[s];
+      if (!await we[d]()) break;
     }
-  }, [k]);
-  ee(() => {
-    if (!r.every((i) => f[i] === "passed")) return;
+  }, [we]);
+  te(() => {
+    if (!o.every((d) => y[d] === "passed")) return;
     const s = {
-      cameraAccess: !!N.cameraAccess,
-      microphoneAccess: !!N.microphoneAccess,
-      faceDetection: N.faceDetection || { status: !1, confidence: 0, timestamp: Date.now() },
-      monitorCount: N.monitorCount || 1,
-      browserSupport: !!N.browserSupport,
+      cameraAccess: !!W.cameraAccess,
+      microphoneAccess: !!W.microphoneAccess,
+      faceDetection: W.faceDetection || { status: !1, confidence: 0, timestamp: Date.now() },
+      monitorCount: W.monitorCount || 1,
+      browserSupport: !!W.browserSupport,
       codeEditorReady: !0
     };
-    n(s), x();
-  }, [f, N]), ee(() => (j(0), () => x()), []);
-  const V = (e) => {
-    const s = r.indexOf(e);
-    u((i) => {
-      const O = { ...i };
-      for (let D = s; D < r.length; D++) O[r[D]] = "pending";
-      return O;
-    }), M((i) => ({ ...i, [e]: "" })), j(s);
-  }, W = r.filter((e) => f[e] === "passed").length, ce = r.some((e) => f[e] === "running"), ne = Math.round((W + (ce ? 0.5 : 0)) / r.length * 100);
-  return /* @__PURE__ */ o.jsx("div", { style: { fontFamily: "system-ui, sans-serif", minHeight: "100vh", display: "grid", placeItems: "center", background: "linear-gradient(135deg,#eff6ff,#eef2ff)" }, children: /* @__PURE__ */ o.jsxs("div", { style: { width: 720, maxWidth: "95vw", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }, children: [
-    /* @__PURE__ */ o.jsxs("div", { style: { textAlign: "center", marginBottom: 12 }, children: [
-      /* @__PURE__ */ o.jsx("h2", { style: { margin: 0, fontSize: 20, fontWeight: 700 }, children: "System Pre-Check" }),
-      /* @__PURE__ */ o.jsx("p", { style: { color: "#6b7280" }, children: "Verifying your system for proctored assessment" })
+    a(s), ne();
+  }, [y, W]), te(() => (be(0), () => ne()), []);
+  const ke = (n) => {
+    const s = o.indexOf(n);
+    x((d) => {
+      const I = { ...d };
+      for (let T = s; T < o.length; T++) I[o[T]] = "pending";
+      return I;
+    }), f((d) => ({ ...d, [n]: "" })), be(s);
+  }, xe = o.filter((n) => y[n] === "passed").length, Te = o.some((n) => y[n] === "running"), pe = Math.round((xe + (Te ? 0.5 : 0)) / o.length * 100);
+  return /* @__PURE__ */ i.jsx("div", { style: { fontFamily: "system-ui, sans-serif", minHeight: "100vh", display: "grid", placeItems: "center", background: "linear-gradient(135deg,#eff6ff,#eef2ff)" }, children: /* @__PURE__ */ i.jsxs("div", { style: { width: 720, maxWidth: "95vw", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }, children: [
+    /* @__PURE__ */ i.jsxs("div", { style: { textAlign: "center", marginBottom: 12 }, children: [
+      /* @__PURE__ */ i.jsx("h2", { style: { margin: 0, fontSize: 20, fontWeight: 700 }, children: "System Pre-Check" }),
+      /* @__PURE__ */ i.jsx("p", { style: { color: "#6b7280" }, children: "Verifying your system for proctored assessment" })
     ] }),
-    /* @__PURE__ */ o.jsxs("div", { style: { marginBottom: 16 }, children: [
-      /* @__PURE__ */ o.jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 12 }, children: [
-        /* @__PURE__ */ o.jsx("span", { children: "Overall Progress" }),
-        /* @__PURE__ */ o.jsxs("span", { children: [
-          ne,
+    /* @__PURE__ */ i.jsxs("div", { style: { marginBottom: 16 }, children: [
+      /* @__PURE__ */ i.jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 12 }, children: [
+        /* @__PURE__ */ i.jsx("span", { children: "Overall Progress" }),
+        /* @__PURE__ */ i.jsxs("span", { children: [
+          pe,
           "%"
         ] })
       ] }),
-      /* @__PURE__ */ o.jsx("div", { style: { height: 8, background: "#f3f4f6", borderRadius: 9999, overflow: "hidden" }, children: /* @__PURE__ */ o.jsx("div", { style: { width: `${ne}%`, height: 8, background: "#3b82f6" } }) })
+      /* @__PURE__ */ i.jsx("div", { style: { height: 8, background: "#f3f4f6", borderRadius: 9999, overflow: "hidden" }, children: /* @__PURE__ */ i.jsx("div", { style: { width: `${pe}%`, height: 8, background: "#3b82f6" } }) })
     ] }),
-    /* @__PURE__ */ o.jsx("div", { style: { display: "grid", gap: 8 }, children: r.map((e) => {
-      const s = e === "camera" ? "Camera Access" : e === "microphone" ? "Microphone Access" : e === "face" ? "Face Detection" : e === "monitor" ? "Monitor Verification" : "Browser Support", i = f[e], O = i === "passed" ? "#ecfdf5" : i === "running" ? "#eff6ff" : i === "failed" ? "#fef2f2" : "#f9fafb", D = i === "passed" ? "#10b981" : i === "running" ? "#3b82f6" : i === "failed" ? "#dc2626" : "#9ca3af";
-      return /* @__PURE__ */ o.jsxs("div", { style: { display: "grid", gridTemplateColumns: "16px 1fr auto", gap: 12, alignItems: "center", padding: 12, borderRadius: 8, border: "1px solid #e5e7eb", background: O }, children: [
-        /* @__PURE__ */ o.jsx("div", { style: { width: 12, height: 12, borderRadius: 9999, background: D } }),
-        /* @__PURE__ */ o.jsxs("div", { style: { minWidth: 0 }, children: [
-          /* @__PURE__ */ o.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: /* @__PURE__ */ o.jsx("div", { style: { fontWeight: 600, fontSize: 14 }, children: s }) }),
-          e === "face" && /* @__PURE__ */ o.jsxs("div", { style: { display: "flex", gap: 12, alignItems: "center", marginTop: 8 }, children: [
-            /* @__PURE__ */ o.jsx("video", { ref: J, muted: !0, playsInline: !0, autoPlay: !0, style: { width: 180, height: 112, background: "#000", borderRadius: 6 } }),
-            i === "running" && /* @__PURE__ */ o.jsxs("div", { style: { color: "#6b7280", fontSize: 12 }, children: [
+    /* @__PURE__ */ i.jsx("div", { style: { display: "grid", gap: 8 }, children: o.map((n) => {
+      const s = n === "camera" ? "Camera Access" : n === "microphone" ? "Microphone Access" : n === "face" ? "Face Detection" : n === "monitor" ? "Single Monitor Check" : "Browser Support", d = y[n], I = d === "passed" ? "#ecfdf5" : d === "running" ? "#eff6ff" : d === "failed" ? "#fef2f2" : "#f9fafb", T = d === "passed" ? "#10b981" : d === "running" ? "#3b82f6" : d === "failed" ? "#dc2626" : "#9ca3af";
+      return /* @__PURE__ */ i.jsxs("div", { style: { display: "grid", gridTemplateColumns: "16px 1fr auto", gap: 12, alignItems: "center", padding: 12, borderRadius: 8, border: "1px solid #e5e7eb", background: I }, children: [
+        /* @__PURE__ */ i.jsx("div", { style: { width: 12, height: 12, borderRadius: 9999, background: T } }),
+        /* @__PURE__ */ i.jsxs("div", { style: { minWidth: 0 }, children: [
+          /* @__PURE__ */ i.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: /* @__PURE__ */ i.jsx("div", { style: { fontWeight: 600, fontSize: 14 }, children: s }) }),
+          n === "face" && /* @__PURE__ */ i.jsxs("div", { style: { display: "flex", gap: 12, alignItems: "center", marginTop: 8 }, children: [
+            /* @__PURE__ */ i.jsx("video", { ref: H, muted: !0, playsInline: !0, autoPlay: !0, style: { width: 180, height: 112, background: "#000", borderRadius: 6 } }),
+            d === "running" && /* @__PURE__ */ i.jsxs("div", { style: { color: "#6b7280", fontSize: 12 }, children: [
               "Analyzing frames: ",
-              C
+              N
             ] })
           ] }),
-          e === "microphone" && i !== "pending" && /* @__PURE__ */ o.jsx("div", { style: { marginTop: 6, width: 220, height: 8, background: "#e5e7eb", borderRadius: 9999, overflow: "hidden" }, children: /* @__PURE__ */ o.jsx("div", { style: { width: `${Math.min(100, Math.round(A * 200))}%`, height: 8, background: "#10b981", transition: "width 150ms" } }) }),
-          q[e] && /* @__PURE__ */ o.jsx("div", { style: { marginTop: 6, color: "#dc2626", fontSize: 12 }, children: q[e] }),
-          e === "monitor" && (i === "running" || i === "pending") && H && /* @__PURE__ */ o.jsxs("div", { style: { marginTop: 6, display: "flex", alignItems: "center", gap: 8 }, children: [
-            /* @__PURE__ */ o.jsx("span", { style: { fontSize: 12, color: "#6b7280" }, children: "Enable multi-screen detection" }),
-            /* @__PURE__ */ o.jsx("button", { onClick: ye, style: { fontSize: 12, padding: "6px 10px", borderRadius: 6, background: "#3b82f6", color: "#fff", border: 0 }, children: "Allow Window Management" })
-          ] })
+          n === "microphone" && d !== "pending" && /* @__PURE__ */ i.jsx("div", { style: { marginTop: 6, width: 220, height: 8, background: "#e5e7eb", borderRadius: 9999, overflow: "hidden" }, children: /* @__PURE__ */ i.jsx("div", { style: { width: `${Math.min(100, Math.round(j * 200))}%`, height: 8, background: "#10b981", transition: "width 150ms" } }) }),
+          v && n === "monitor" && (d === "running" || d === "pending") && /* @__PURE__ */ i.jsx("div", { style: { marginTop: 6, color: "#6b7280", fontSize: 12 }, children: "Requesting display info… click anywhere or press a key to continue." }),
+          q[n] && /* @__PURE__ */ i.jsx("div", { style: { marginTop: 6, color: "#dc2626", fontSize: 12 }, children: q[n] })
         ] }),
-        /* @__PURE__ */ o.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
-          /* @__PURE__ */ o.jsx("div", { style: { fontSize: 12, padding: "2px 8px", borderRadius: 9999, background: i === "passed" ? "#111827" : i === "failed" ? "#fee2e2" : "#e5e7eb", color: i === "passed" ? "#fff" : "#111827" }, children: i === "passed" ? "Passed" : i === "running" ? "Checking…" : i === "failed" ? "Failed" : "Pending" }),
-          i === "failed" && /* @__PURE__ */ o.jsx("button", { onClick: () => V(e), style: { fontSize: 12, padding: "6px 10px", borderRadius: 6, background: "#111827", color: "#fff", border: 0 }, children: "Retry" })
+        /* @__PURE__ */ i.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+          /* @__PURE__ */ i.jsx("div", { style: { fontSize: 12, padding: "2px 8px", borderRadius: 9999, background: d === "passed" ? "#111827" : d === "failed" ? "#fee2e2" : "#e5e7eb", color: d === "passed" ? "#fff" : "#111827" }, children: d === "passed" ? "Passed" : d === "running" ? "Checking…" : d === "failed" ? "Failed" : "Pending" }),
+          d === "failed" && /* @__PURE__ */ i.jsx("button", { onClick: () => ke(n), style: { fontSize: 12, padding: "6px 10px", borderRadius: 6, background: "#111827", color: "#fff", border: 0 }, children: "Retry" })
         ] })
-      ] }, e);
+      ] }, n);
     }) })
   ] }) });
 }
-function yt(n) {
-  const { onEvent: a, context: r = "coding" } = n || {}, [f, u] = m("idle"), [C, _] = m(void 0), [A, w] = m(0), [H, p] = m(0), g = E(null), z = E(null), q = E(null), M = E(!1), N = E(0), B = E(0), L = E(null), X = P(() => {
-    q.current && cancelAnimationFrame(q.current), q.current = null;
+function Et(a) {
+  const { onEvent: l, context: o = "coding" } = a || {}, [y, x] = b("idle"), [N, L] = b(void 0), [j, g] = b(0), [q, f] = b(0), v = P(null), $ = P(null), W = P(null), V = P(!1), G = P(0), Q = P(0), B = P(null), D = Y(() => {
+    W.current && cancelAnimationFrame(W.current), W.current = null;
     try {
-      g.current?.dispose();
+      v.current?.dispose();
     } catch {
     }
-    g.current = null;
+    v.current = null;
     try {
-      z.current?.getTracks().forEach((v) => v.stop());
+      $.current?.getTracks().forEach((A) => A.stop());
     } catch {
     }
-    z.current = null, u("idle");
-  }, []), te = P(
-    (v) => {
-      const x = Date.now(), K = M.current;
-      v > 18 && x - N.current > 2e3 && (p(($) => $ + 1), N.current = x, a?.({
+    $.current = null, x("idle");
+  }, []), H = Y(
+    (A) => {
+      const M = Date.now(), X = V.current;
+      A > 18 && M - G.current > 2e3 && (f((F) => F + 1), G.current = M, l?.({
         eventType: "audio_anomaly",
         severity: "warning",
-        context: r,
-        data: { level: v, reason: "audio_spike", faceDetected: K }
-      })), K && v < 3 ? L.current == null ? L.current = x : x - L.current > 15e3 && (p(($) => $ + 1), L.current = null, a?.({
+        context: o,
+        data: { level: A, reason: "audio_spike", faceDetected: X }
+      })), X && A < 3 ? B.current == null ? B.current = M : M - B.current > 15e3 && (f((F) => F + 1), B.current = null, l?.({
         eventType: "audio_anomaly",
         severity: "warning",
-        context: r,
-        data: { level: v, reason: "extended_silence_with_face" }
-      })) : v >= 3 && (L.current = null), !K && v > 12 && x - B.current > 3e3 && (p(($) => $ + 1), B.current = x, a?.({
+        context: o,
+        data: { level: A, reason: "extended_silence_with_face" }
+      })) : A >= 3 && (B.current = null), !X && A > 12 && M - Q.current > 3e3 && (f((F) => F + 1), Q.current = M, l?.({
         eventType: "audio_anomaly",
         severity: "warning",
-        context: r,
-        data: { level: v, reason: "audio_without_face" }
+        context: o,
+        data: { level: A, reason: "audio_without_face" }
       }));
     },
-    [r, a]
-  ), U = P(() => {
+    [o, l]
+  ), ne = Y(() => {
     try {
-      if (!g.current) return;
-      const v = g.current.getLevel(), x = Math.max(0, Math.min(100, Math.round(v * 160)));
-      w(x), te(x);
+      if (!v.current) return;
+      const A = v.current.getLevel(), M = Math.max(0, Math.min(100, Math.round(A * 160)));
+      g(M), H(M);
     } finally {
-      q.current = requestAnimationFrame(U);
+      W.current = requestAnimationFrame(ne);
     }
-  }, [te]), J = P(
-    async (v) => {
+  }, [H]), de = Y(
+    async (A) => {
       try {
-        _(void 0), p(0), N.current = 0, B.current = 0, L.current = null;
-        let x = v;
-        if (!x && typeof window < "u" && window.precheckAudioStream) {
-          const se = window.precheckAudioStream;
-          se?.active && se.getAudioTracks().length > 0 && (x = se);
+        L(void 0), f(0), G.current = 0, Q.current = 0, B.current = null;
+        let M = A;
+        if (!M && typeof window < "u" && window.precheckAudioStream) {
+          const he = window.precheckAudioStream;
+          he?.active && he.getAudioTracks().length > 0 && (M = he);
         }
-        x || (x = await navigator.mediaDevices.getUserMedia({
+        M || (M = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: !0, noiseSuppression: !0, autoGainControl: !0, sampleRate: 44100 }
-        })), z.current = x;
-        const K = x.getAudioTracks(), $ = K.length ? new MediaStream(K) : x;
-        g.current = et($), u("running"), q.current = requestAnimationFrame(U);
-      } catch (x) {
-        u("error"), _(x instanceof Error ? x.message : String(x));
+        })), $.current = M;
+        const X = M.getAudioTracks(), F = X.length ? new MediaStream(X) : M;
+        v.current = pt(F), x("running"), W.current = requestAnimationFrame(ne);
+      } catch (M) {
+        x("error"), L(M instanceof Error ? M.message : String(M));
       }
     },
-    [U]
-  ), oe = P((v) => {
-    M.current = v;
+    [ne]
+  ), fe = Y((A) => {
+    V.current = A;
   }, []);
-  return ee(() => X, [X]), { status: f, error: C, level: A, anomalyCount: H, start: J, stop: X, setFaceDetected: oe };
+  return te(() => D, [D]), { status: y, error: N, level: j, anomalyCount: q, start: de, stop: D, setFaceDetected: fe };
 }
-function wt({ monitoringStatus: n, sessionData: a, onStatusChange: r, onUpdateSession: f, onAddEvent: u }) {
-  const [C, _] = m({ x: typeof window < "u" ? window.innerWidth - 280 : 0, y: typeof window < "u" ? window.innerHeight - 400 : 0 }), [A, w] = m(!1), [H, p] = m({ x: 0, y: 0 }), [g, z] = m(0), [q, M] = m(!1), [N, B] = m(null), [L, X] = m(null), [te, U] = m(null), [J, oe] = m(null), [v, x] = m(0), [K, $] = m(0), [se, ue] = m([]), [ye, de] = m(0), [fe, F] = m(0), [we, ve] = m(0), [me, t] = m(0), [d, k] = m(0), [j, V] = m(!1), [W, ce] = m(null), [ne, e] = m(null), [s, i] = m(0), [O, D] = m(0), [be, Oe] = m(0), [he, Pe] = m(null), [ze, tt] = m(0), [Et, nt] = m(0), pe = E(null), De = E(null), Ie = E(null), Me = E(null), xe = E(null), Te = E(null), rt = E(!1), Ne = E(0), Le = E(0), Ee = E("none");
-  E({ noFace: 0, multipleFaces: 0 });
-  const ae = E({ noFace: !1, multipleFaces: !1, gazeOff: !1 }), { level: qe, anomalyCount: We, start: ot, stop: st, setFaceDetected: Ye } = yt({
+function Ct({ monitoringStatus: a, sessionData: l, onStatusChange: o, onUpdateSession: y, onAddEvent: x }) {
+  const [N, L] = b({ x: typeof window < "u" ? window.innerWidth - 280 : 0, y: typeof window < "u" ? window.innerHeight - 400 : 0 }), [j, g] = b(!1), [q, f] = b({ x: 0, y: 0 }), [v, $] = b(0), [W, V] = b(!1), [G, Q] = b(null), [B, D] = b(null), [H, ne] = b(null), [de, fe] = b(null), [A, M] = b(0), [X, F] = b(0), [he, _e] = b([]), [ee, re] = b(0), [ie, we] = b(0), [be, ke] = b(0), [xe, Te] = b(0), [pe, n] = b(0), [s, d] = b(!1), [I, T] = b(null), [K, oe] = b(null), [se, je] = b(0), [lt, Ae] = b(0), [Ye, rt] = b(0), [Se, me] = b(null), [Fe, qe] = b(0), [Oe, ot] = b(0), ce = P(null), Ee = P(null), Ue = P(null), Me = P(null), ue = P(null), Ce = P(null), Ve = P(!1), Ge = P(0), Pe = P(0), ge = P("none");
+  P({ noFace: 0, multipleFaces: 0 });
+  const ae = P({ noFace: !1, multipleFaces: !1, gazeOff: !1 }), { level: Ke, anomalyCount: Je, start: at, stop: it, setFaceDetected: He } = Et({
     context: "coding",
-    onEvent: (c) => u?.({ ...c, timestamp: Date.now() })
+    onEvent: (p) => x?.({ ...p, timestamp: Date.now() })
   });
-  ee(() => x(qe), [qe]), ee(() => $(We), [We]);
-  const Ge = P((c, l) => {
-    const h = c.data;
-    let y = 0, T = 0, Z = 0;
-    for (let S = 0; S < h.length; S += 4) {
-      const Y = h[S], ge = h[S + 1], re = h[S + 2], G = (Y + ge + re) / 3;
-      if (y += G, S > 0) {
-        const Se = (h[S - 4] + h[S - 3] + h[S - 2]) / 3;
-        T += Math.abs(G - Se);
+  te(() => M(Ke), [Ke]), te(() => F(Je), [Je]);
+  const Xe = Y((p, m) => {
+    const w = p.data;
+    let R = 0, O = 0, J = 0;
+    for (let c = 0; c < w.length; c += 4) {
+      const h = w[c], z = w[c + 1], _ = w[c + 2], C = (h + z + _) / 3;
+      if (R += C, c > 0) {
+        const U = (w[c - 4] + w[c - 3] + w[c - 2]) / 3;
+        O += Math.abs(C - U);
       }
-      if (S > c.width * 4 && S < h.length - c.width * 4) {
-        const Se = (h[S - c.width * 4] + h[S - c.width * 4 + 1] + h[S - c.width * 4 + 2]) / 3, lt = (h[S + c.width * 4] + h[S + c.width * 4 + 1] + h[S + c.width * 4 + 2]) / 3;
-        (Math.abs(G - Se) > 30 || Math.abs(G - lt) > 30) && Z++;
+      if (c > p.width * 4 && c < w.length - p.width * 4) {
+        const U = (w[c - p.width * 4] + w[c - p.width * 4 + 1] + w[c - p.width * 4 + 2]) / 3, ve = (w[c + p.width * 4] + w[c + p.width * 4 + 1] + w[c + p.width * 4 + 2]) / 3;
+        (Math.abs(C - U) > 30 || Math.abs(C - ve) > 30) && J++;
       }
     }
-    const b = h.length / 4;
-    y /= b, T /= b;
-    const R = Z / b, Q = l.width / l.height, I = {
-      neutral: Math.max(0.1, 0.6 - Math.abs(y - 120) / 200 - Math.abs(T - 15) / 100),
-      happy: Math.max(0.05, (y > 115 ? 0.4 : 0.1) + (R > 0.15 ? 0.3 : 0) + (Q > 0.85 ? 0.2 : 0)),
-      focused: Math.max(0.05, (T > 20 ? 0.4 : 0.1) + (R > 0.12 ? 0.2 : 0) + (y < 110 ? 0.2 : 0)),
-      concerned: Math.max(0.05, (y < 105 ? 0.3 : 0.1) + (T > 25 ? 0.2 : 0) + (Q < 0.75 ? 0.2 : 0)),
-      surprised: Math.max(0.05, (Q > 0.9 ? 0.3 : 0.1) + (R > 0.18 ? 0.3 : 0))
-    }, ie = Date.now() % 1e4 / 1e4;
-    Object.keys(I).forEach((S) => {
-      const Y = S;
-      I[Y] += Math.sin(ie * Math.PI * 2) * 0.1, I[Y] = Math.max(0.05, Math.min(0.95, I[Y]));
+    const k = w.length / 4;
+    R /= k, O /= k;
+    const e = J / k, t = m.width / m.height, r = {
+      neutral: Math.max(0.1, 0.6 - Math.abs(R - 120) / 200 - Math.abs(O - 15) / 100),
+      happy: Math.max(0.05, (R > 115 ? 0.4 : 0.1) + (e > 0.15 ? 0.3 : 0) + (t > 0.85 ? 0.2 : 0)),
+      focused: Math.max(0.05, (O > 20 ? 0.4 : 0.1) + (e > 0.12 ? 0.2 : 0) + (R < 110 ? 0.2 : 0)),
+      concerned: Math.max(0.05, (R < 105 ? 0.3 : 0.1) + (O > 25 ? 0.2 : 0) + (t < 0.75 ? 0.2 : 0)),
+      surprised: Math.max(0.05, (t > 0.9 ? 0.3 : 0.1) + (e > 0.18 ? 0.3 : 0))
+    }, u = Date.now() % 1e4 / 1e4;
+    Object.keys(r).forEach((c) => {
+      const h = c;
+      r[h] += Math.sin(u * Math.PI * 2) * 0.1, r[h] = Math.max(0.05, Math.min(0.95, r[h]));
     });
-    const ke = Object.entries(I).reduce((S, Y) => I[S[0]] > I[Y[0]] ? S : Y)[0], le = Math.max(...Object.values(I));
-    return { dominant: ke, confidence: le, emotions: I };
-  }, []), Be = P((c, l) => {
-    const h = l.data;
-    let y = 0, T = 0, Z = 0;
-    const b = Math.floor(l.height * 0.6);
-    for (let le = Math.floor(l.height * 0.3); le < b; le++)
-      for (let S = 0; S < l.width; S += 4) {
-        const Y = (le * l.width + S) * 4, ge = h[Y], re = h[Y + 1], G = h[Y + 2];
-        (ge + re + G) / 3 < 100 ? y++ : T++, (Math.abs(ge - re) > 30 || Math.abs(re - G) > 30) && Z++;
+    const S = Object.entries(r).reduce((c, h) => r[c[0]] > r[h[0]] ? c : h)[0], E = Math.max(...Object.values(r));
+    return { dominant: S, confidence: E, emotions: r };
+  }, []), De = Y((p, m) => {
+    const w = m.data;
+    let R = 0, O = 0, J = 0;
+    const k = Math.floor(m.height * 0.6);
+    for (let E = Math.floor(m.height * 0.3); E < k; E++)
+      for (let c = 0; c < m.width; c += 4) {
+        const h = (E * m.width + c) * 4, z = w[h], _ = w[h + 1], C = w[h + 2];
+        (z + _ + C) / 3 < 100 ? R++ : O++, (Math.abs(z - _) > 30 || Math.abs(_ - C) > 30) && J++;
       }
-    const R = y + T, Q = R ? y / R : 0, I = R ? Z / R : 0, ie = Q > 0.4 && I < 0.3, ke = Q > 0.2;
-    return { isProfessional: ie, hasShirt: ke, confidence: 0.7, details: ie ? "Professional attire detected" : "Casual attire detected" };
-  }, []), Ue = P((c, l, h) => {
-    const y = c.x + c.width / 2, T = c.y + c.height / 2, Z = (y - l / 2) / l, b = (T - h / 2) / h, R = Math.sqrt(Z * Z + b * b), Q = R < 0.15, I = Math.max(0, 1 - R * 2);
-    return { isLookingAtCamera: Q, gazeDirection: { x: Z, y: b }, confidence: 0.8, attentionScore: I };
-  }, []), $e = P((c) => {
-    const { gazeDirection: l, attentionScore: h, isLookingAtCamera: y } = c, T = Math.sqrt(l.x * l.x + l.y * l.y);
-    return !y && T > 0.5 && h < 0.3;
-  }, []), at = P(async () => {
+    const e = R + O, t = e ? R / e : 0, r = e ? J / e : 0, u = t > 0.4 && r < 0.3, S = t > 0.2;
+    return { isProfessional: u, hasShirt: S, confidence: 0.7, details: u ? "Professional attire detected" : "Casual attire detected" };
+  }, []), Ie = Y((p, m, w) => {
+    const R = p.x + p.width / 2, O = p.y + p.height / 2, J = (R - m / 2) / m, k = (O - w / 2) / w, e = Math.sqrt(J * J + k * k), t = e < 0.15, r = Math.max(0, 1 - e * 2);
+    return { isLookingAtCamera: t, gazeDirection: { x: J, y: k }, confidence: 0.8, attentionScore: r };
+  }, []), le = Y((p) => {
+    const { gazeDirection: m, attentionScore: w, isLookingAtCamera: R } = p, O = Math.sqrt(m.x * m.x + m.y * m.y);
+    return !R && O > 0.5 && w < 0.3;
+  }, []), ze = Y(async () => {
     try {
-      const c = await import("./index-2kM27Pi_.js"), l = await import("./blazeface.esm-D5KORnOe.js");
-      c.ready && await c.ready();
-      const h = await l.load();
-      return Me.current = h, !0;
-    } catch (c) {
-      return console.error("[widget] Failed to init face detection:", c), !1;
+      const p = await import("./index-2kM27Pi_.js"), m = await import("./blazeface.esm-D5KORnOe.js");
+      p.ready && await p.ready();
+      const w = await m.load();
+      return Me.current = w, !0;
+    } catch (p) {
+      return console.error("[widget] Failed to init face detection:", p), !1;
     }
-  }, []), Re = P(async () => {
-    if (!pe.current || !De.current || !Me.current) {
-      xe.current = requestAnimationFrame(Re);
+  }, []), ye = Y(async () => {
+    if (!ce.current || !Ee.current || !Me.current) {
+      ue.current = requestAnimationFrame(ye);
       return;
     }
-    const c = pe.current, l = De.current;
-    if (c.readyState !== 4) {
-      xe.current = requestAnimationFrame(Re);
+    const p = ce.current, m = Ee.current;
+    if (p.readyState !== 4) {
+      ue.current = requestAnimationFrame(ye);
       return;
     }
     try {
-      const y = (await Me.current.estimateFaces(c, !1)).map((b) => {
-        const [R, Q] = b.topLeft, [I, ie] = b.bottomRight;
-        return { x: R, y: Q, width: I - R, height: ie - Q, confidence: b.probability?.[0] || 0.8 };
+      const R = (await Me.current.estimateFaces(p, !1)).map((k) => {
+        const [e, t] = k.topLeft, [r, u] = k.bottomRight;
+        return { x: e, y: t, width: r - e, height: u - t, confidence: k.probability?.[0] || 0.8 };
       });
-      z(y.length), ue(y), M(y.length === 1), Ye(y.length > 0);
-      const T = Date.now();
-      let Z = y.length === 0 ? "none" : y.length === 1 ? "single" : "multiple";
-      if (Z === "multiple")
-        Ee.current !== "multiple" && (ce(T), Oe((b) => b + 1), ae.current.multipleFaces || (ae.current.multipleFaces = !0, u?.({ eventType: "face_detection", severity: "warning", context: "coding", data: { reason: "multiple_faces", count: y.length }, timestamp: T })));
+      $(R.length), _e(R), V(R.length === 1), He(R.length > 0);
+      const O = Date.now();
+      let J = R.length === 0 ? "none" : R.length === 1 ? "single" : "multiple";
+      if (J === "multiple")
+        ge.current !== "multiple" && (T(O), rt((k) => k + 1), ae.current.multipleFaces || (ae.current.multipleFaces = !0, x?.({ eventType: "face_detection", severity: "warning", context: "coding", data: { reason: "multiple_faces", count: R.length }, timestamp: O })));
       else {
-        if (Ee.current === "multiple" && W !== null) {
-          const b = T - W;
-          i((R) => R + b), ce(null);
+        if (ge.current === "multiple" && I !== null) {
+          const k = O - I;
+          je((e) => e + k), T(null);
         }
         ae.current.multipleFaces = !1;
       }
-      if (Z === "none")
-        Ee.current !== "none" && (Pe(T), tt((b) => b + 1), ae.current.noFace || (ae.current.noFace = !0, u?.({ eventType: "face_detection", severity: "critical", context: "coding", data: { reason: "no_face" }, timestamp: T })));
+      if (J === "none")
+        ge.current !== "none" && (me(O), qe((k) => k + 1), ae.current.noFace || (ae.current.noFace = !0, x?.({ eventType: "face_detection", severity: "critical", context: "coding", data: { reason: "no_face" }, timestamp: O })));
       else {
-        if (Ee.current === "none" && he !== null) {
-          const b = T - he;
-          nt((R) => R + b), Pe(null);
+        if (ge.current === "none" && Se !== null) {
+          const k = O - Se;
+          ot((e) => e + k), me(null);
         }
         ae.current.noFace = !1;
       }
-      if (Ee.current = Z, y.length === 1) {
-        const b = y[0], R = l.getContext("2d");
-        if (R) {
-          R.drawImage(c, 0, 0, l.width, l.height);
-          const Q = R.getImageData(0, 0, l.width, l.height), I = R.getImageData(b.x, b.y, b.width, b.height), ie = {
+      if (ge.current = J, R.length === 1) {
+        const k = R[0], e = m.getContext("2d");
+        if (e) {
+          e.drawImage(p, 0, 0, m.width, m.height);
+          const t = e.getImageData(0, 0, m.width, m.height), r = e.getImageData(k.x, k.y, k.width, k.height), u = {
             isGoodPosture: Math.abs(Math.random() * 20 - 10) < 5,
             shoulderAlignment: Math.random() * 20 - 10,
             headTilt: Math.random() * 15 - 7.5,
             confidence: 0.75
-          }, ke = Ge(I, b), le = Be(I, Q), S = Ue(b, l.width, l.height);
-          B(ie), X(ke), U(le), oe(S);
-          const Y = $e(S);
-          if (Y && !j && Date.now() - Le.current > 3e3)
-            k((re) => re + 1), V(!0), e(T), Le.current = Date.now(), ae.current.gazeOff || (ae.current.gazeOff = !0, u?.({ eventType: "gaze_tracking", severity: "warning", context: "coding", data: { offscreen: !0 }, timestamp: T }));
-          else if (!Y && j) {
-            if (ne !== null) {
-              const re = T - ne;
-              D((G) => G + re), e(null);
+          }, S = Xe(r, k), E = De(r, t), c = Ie(k, m.width, m.height);
+          Q(u), D(S), ne(E), fe(c);
+          const h = le(c);
+          if (h && !s && Date.now() - Pe.current > 3e3)
+            n((_) => _ + 1), d(!0), oe(O), Pe.current = Date.now(), ae.current.gazeOff || (ae.current.gazeOff = !0, x?.({ eventType: "gaze_tracking", severity: "warning", context: "coding", data: { offscreen: !0 }, timestamp: O }));
+          else if (!h && s) {
+            if (K !== null) {
+              const _ = O - K;
+              Ae((C) => C + _), oe(null);
             }
-            V(!1), ae.current.gazeOff = !1;
+            d(!1), ae.current.gazeOff = !1;
           }
-          const ge = y.length === 0 || y.length > 1;
-          if (f && (ge || T - Ne.current >= 5e3)) {
-            const re = a?.snapshots || [];
-            let G = re;
-            if (ge) {
-              const Se = {
-                timestamp: T,
+          const z = R.length === 0 || R.length > 1;
+          if (y && (z || O - Ge.current >= 5e3)) {
+            const _ = l?.snapshots || [];
+            let C = _;
+            if (z) {
+              const U = {
+                timestamp: O,
                 type: "violation_trigger",
                 image: "base64_image_placeholder",
-                context: y.length === 0 ? "No face detected" : "Multiple faces detected"
+                context: R.length === 0 ? "No face detected" : "Multiple faces detected"
               };
-              G = [...re, Se], G.length > 30 && (G = G.slice(-30));
+              C = [..._, U], C.length > 30 && (C = C.slice(-30));
             }
-            f({ snapshots: G, postureAnalysis: ie, attireAnalysis: le }), Ne.current = T;
+            y({ snapshots: C, postureAnalysis: u, attireAnalysis: E }), Ge.current = O;
           }
         }
-      } else if (B(null), X(null), U(null), oe(null), j) {
-        if (ne !== null) {
-          const b = T - ne;
-          D((R) => R + b), e(null);
+      } else if (Q(null), D(null), ne(null), fe(null), s) {
+        if (K !== null) {
+          const k = O - K;
+          Ae((e) => e + k), oe(null);
         }
-        V(!1);
+        d(!1);
       }
-      y.length === 0 ? r?.("violation") : y.length > 1 ? r?.("warning") : r?.("optimal");
-    } catch (h) {
-      console.error("[widget] Face detection error:", h);
+      R.length === 0 ? o?.("violation") : R.length > 1 ? o?.("warning") : o?.("optimal");
+    } catch (w) {
+      console.error("[widget] Face detection error:", w);
     }
-    xe.current = requestAnimationFrame(Re);
-  }, [Ge, Be, Ue, $e, r, f, a?.snapshots, j, W, ne, Ye]);
-  ee(() => {
-    $(0);
-  }, []), ee(() => ((async () => {
+    ue.current = requestAnimationFrame(ye);
+  }, [Xe, De, Ie, le, o, y, l?.snapshots, s, I, K, He]);
+  te(() => {
+    F(0);
+  }, []), te(() => ((async () => {
     try {
-      const l = await navigator.mediaDevices.getUserMedia({
+      const m = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } },
         audio: { echoCancellation: !0, noiseSuppression: !0, autoGainControl: !0 }
       });
-      pe.current && (pe.current.srcObject = l);
-      let h = null;
-      const y = l.getAudioTracks();
-      y.length > 0 && (h = new MediaStream(y), Te.current = h), await at(), h && await ot(h), xe.current = requestAnimationFrame(Re);
+      ce.current && (ce.current.srcObject = m);
+      let w = null;
+      const R = m.getAudioTracks();
+      R.length > 0 && (w = new MediaStream(R), Ce.current = w), await ze(), w && await at(w), ue.current = requestAnimationFrame(ye);
     } catch {
-      r?.("violation");
+      o?.("violation");
     }
   })(), () => {
-    rt.current = !0, xe.current && cancelAnimationFrame(xe.current), pe.current?.srcObject && pe.current.srcObject.getTracks().forEach((h) => h.stop()), Te.current && Te.current.getTracks().forEach((l) => l.stop()), st(), Te.current = null;
+    Ve.current = !0, ue.current && cancelAnimationFrame(ue.current), ce.current?.srcObject && ce.current.srcObject.getTracks().forEach((w) => w.stop()), Ce.current && Ce.current.getTracks().forEach((m) => m.stop()), it(), Ce.current = null;
   }), []);
-  const it = (c) => {
-    w(!0);
-    const l = Ie.current?.getBoundingClientRect();
-    l && p({ x: c.clientX - l.left, y: c.clientY - l.top });
-  }, Ve = (c) => {
-    if (A) {
-      const l = Math.max(0, Math.min((typeof window < "u" ? window.innerWidth : 0) - 280, c.clientX - H.x)), h = Math.max(0, Math.min((typeof window < "u" ? window.innerHeight : 0) - 400, c.clientY - H.y));
-      _({ x: l, y: h });
+  const Ze = (p) => {
+    g(!0);
+    const m = Ue.current?.getBoundingClientRect();
+    m && f({ x: p.clientX - m.left, y: p.clientY - m.top });
+  }, Qe = (p) => {
+    if (j) {
+      const m = Math.max(0, Math.min((typeof window < "u" ? window.innerWidth : 0) - 280, p.clientX - q.x)), w = Math.max(0, Math.min((typeof window < "u" ? window.innerHeight : 0) - 400, p.clientY - q.y));
+      L({ x: m, y: w });
     }
-  }, He = () => w(!1);
-  ee(() => {
-    if (A)
-      return document.addEventListener("mousemove", Ve), document.addEventListener("mouseup", He), () => {
-        document.removeEventListener("mousemove", Ve), document.removeEventListener("mouseup", He);
+  }, Le = () => g(!1);
+  te(() => {
+    if (j)
+      return document.addEventListener("mousemove", Qe), document.addEventListener("mouseup", Le), () => {
+        document.removeEventListener("mousemove", Qe), document.removeEventListener("mouseup", Le);
       };
-  }, [A, H]);
-  const Xe = () => {
-    document.hidden && F((c) => {
-      const l = c + 1;
-      return u?.({ eventType: "tab_switch", severity: "critical", context: "coding", data: { when: Date.now() }, timestamp: Date.now() }), l;
+  }, [j, q]);
+  const et = () => {
+    document.hidden && we((p) => {
+      const m = p + 1;
+      return x?.({ eventType: "tab_switch", severity: "critical", context: "coding", data: { when: Date.now() }, timestamp: Date.now() }), m;
     });
-  }, Je = () => de((c) => c + 1), Ke = (c) => {
-    ve((l) => l + 1), u?.({ eventType: "keystroke", severity: "info", context: "coding", data: {}, timestamp: Date.now() }), (c.ctrlKey || c.metaKey) && (c.key === "c" || c.key === "x" || c.key === "v") && (t((l) => l + 1), c.preventDefault(), u?.({ eventType: "keystroke", severity: "warning", context: "coding", data: { copyCutPaste: !0, key: c.key }, timestamp: Date.now() }));
+  }, We = () => re((p) => p + 1), Ne = (p) => {
+    ke((m) => m + 1), x?.({ eventType: "keystroke", severity: "info", context: "coding", data: {}, timestamp: Date.now() }), (p.ctrlKey || p.metaKey) && (p.key === "c" || p.key === "x" || p.key === "v") && (Te((m) => m + 1), p.preventDefault(), x?.({ eventType: "keystroke", severity: "warning", context: "coding", data: { copyCutPaste: !0, key: p.key }, timestamp: Date.now() }));
   };
-  ee(() => (document.addEventListener("visibilitychange", Xe), window.addEventListener("blur", Je), document.addEventListener("keydown", Ke), () => {
-    document.removeEventListener("visibilitychange", Xe), window.removeEventListener("blur", Je), document.removeEventListener("keydown", Ke);
+  te(() => (document.addEventListener("visibilitychange", et), window.addEventListener("blur", We), document.addEventListener("keydown", Ne), () => {
+    document.removeEventListener("visibilitychange", et), window.removeEventListener("blur", We), document.removeEventListener("keydown", Ne);
   }), []);
-  const ct = g === 0 ? "#ef4444" : g > 1 ? "#f59e0b" : "#22c55e";
-  return /* @__PURE__ */ o.jsxs(
+  const st = v === 0 ? "#ef4444" : v > 1 ? "#f59e0b" : "#22c55e";
+  return /* @__PURE__ */ i.jsxs(
     "div",
     {
-      ref: Ie,
-      onMouseDown: it,
+      ref: Ue,
+      onMouseDown: Ze,
       style: {
         position: "fixed",
-        left: C.x,
-        top: C.y,
+        left: N.x,
+        top: N.y,
         zIndex: 9999,
         width: 288,
         cursor: "move",
-        border: `2px solid ${ct}`,
+        border: `2px solid ${st}`,
         borderRadius: 8,
         background: "#fff",
         boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
@@ -873,82 +1211,82 @@ function wt({ monitoringStatus: n, sessionData: a, onStatusChange: r, onUpdateSe
         userSelect: "none"
       },
       children: [
-        /* @__PURE__ */ o.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }, children: /* @__PURE__ */ o.jsx("div", { style: { fontSize: 12, fontWeight: 600 }, children: g === 0 ? "No Face" : g > 1 ? "Multiple Faces" : q ? "Optimal" : "Good" }) }),
-        /* @__PURE__ */ o.jsxs("div", { style: { position: "relative", background: "#000", borderRadius: 4, overflow: "hidden" }, children: [
-          /* @__PURE__ */ o.jsx("video", { ref: pe, autoPlay: !0, muted: !0, playsInline: !0, style: { width: "100%", height: 128, objectFit: "cover" } }),
-          /* @__PURE__ */ o.jsx("canvas", { ref: De, width: 320, height: 240, style: { display: "none" } })
+        /* @__PURE__ */ i.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }, children: /* @__PURE__ */ i.jsx("div", { style: { fontSize: 12, fontWeight: 600 }, children: v === 0 ? "No Face" : v > 1 ? "Multiple Faces" : W ? "Optimal" : "Good" }) }),
+        /* @__PURE__ */ i.jsxs("div", { style: { position: "relative", background: "#000", borderRadius: 4, overflow: "hidden" }, children: [
+          /* @__PURE__ */ i.jsx("video", { ref: ce, autoPlay: !0, muted: !0, playsInline: !0, style: { width: "100%", height: 128, objectFit: "cover" } }),
+          /* @__PURE__ */ i.jsx("canvas", { ref: Ee, width: 320, height: 240, style: { display: "none" } })
         ] }),
-        /* @__PURE__ */ o.jsxs("div", { style: { marginTop: 8, fontSize: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }, children: [
-          /* @__PURE__ */ o.jsxs("div", { children: [
+        /* @__PURE__ */ i.jsxs("div", { style: { marginTop: 8, fontSize: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }, children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Faces: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: g === 1 ? "#16a34a" : "#ef4444" }, children: g })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: v === 1 ? "#16a34a" : "#ef4444" }, children: v })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "No Face: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: ze > 0 ? "#ef4444" : "#16a34a" }, children: ze })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: Fe > 0 ? "#ef4444" : "#16a34a" }, children: Fe })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Multiple: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: be > 0 ? "#ef4444" : "#16a34a" }, children: be })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: Ye > 0 ? "#ef4444" : "#16a34a" }, children: Ye })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Eye Contact: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: J?.isLookingAtCamera ? "#16a34a" : "#ef4444" }, children: J?.isLookingAtCamera ? "Yes" : "No" })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: de?.isLookingAtCamera ? "#16a34a" : "#ef4444" }, children: de?.isLookingAtCamera ? "Yes" : "No" })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Posture: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: N?.isGoodPosture ? "#16a34a" : "#f59e0b" }, children: N?.isGoodPosture ? "Good" : "Poor" })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: G?.isGoodPosture ? "#16a34a" : "#f59e0b" }, children: G?.isGoodPosture ? "Good" : "Poor" })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Attire: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: te?.isProfessional ? "#16a34a" : "#f59e0b" }, children: te?.isProfessional ? "Professional" : "Casual" })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: H?.isProfessional ? "#16a34a" : "#f59e0b" }, children: H?.isProfessional ? "Professional" : "Casual" })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Emotion: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: "#3b82f6" }, children: L?.dominant || "Unknown" })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: "#3b82f6" }, children: B?.dominant || "Unknown" })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+          /* @__PURE__ */ i.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
             "Audio: ",
-            /* @__PURE__ */ o.jsxs("span", { style: { color: v > 50 ? "#16a34a" : v > 20 ? "#f59e0b" : "#ef4444" }, children: [
-              v,
+            /* @__PURE__ */ i.jsxs("span", { style: { color: A > 50 ? "#16a34a" : A > 20 ? "#f59e0b" : "#ef4444" }, children: [
+              A,
               "%"
             ] }),
-            /* @__PURE__ */ o.jsx("div", { style: { width: 64, height: 6, background: "#eee", borderRadius: 9999, overflow: "hidden" }, children: /* @__PURE__ */ o.jsx("div", { style: { width: `${Math.min(v, 100)}%`, height: 6, transition: "width 100ms", background: v > 50 ? "#16a34a" : v > 20 ? "#f59e0b" : "#ef4444" } }) })
+            /* @__PURE__ */ i.jsx("div", { style: { width: 64, height: 6, background: "#eee", borderRadius: 9999, overflow: "hidden" }, children: /* @__PURE__ */ i.jsx("div", { style: { width: `${Math.min(A, 100)}%`, height: 6, transition: "width 100ms", background: A > 50 ? "#16a34a" : A > 20 ? "#f59e0b" : "#ef4444" } }) })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Audio Alerts: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: K > 0 ? "#ef4444" : "#16a34a" }, children: K })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: X > 0 ? "#ef4444" : "#16a34a" }, children: X })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Unfocus: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: ye > 0 ? "#ef4444" : "#16a34a" }, children: ye })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: ee > 0 ? "#ef4444" : "#16a34a" }, children: ee })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Tab Switch: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: fe > 0 ? "#ef4444" : "#16a34a" }, children: fe })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: ie > 0 ? "#ef4444" : "#16a34a" }, children: ie })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Keystrokes: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: "#3b82f6" }, children: we })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: "#3b82f6" }, children: be })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Copy Attempts: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: me > 0 ? "#ef4444" : "#16a34a" }, children: me })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: xe > 0 ? "#ef4444" : "#16a34a" }, children: xe })
           ] }),
-          /* @__PURE__ */ o.jsxs("div", { children: [
+          /* @__PURE__ */ i.jsxs("div", { children: [
             "Gaze Off: ",
-            /* @__PURE__ */ o.jsx("strong", { style: { color: d > 0 ? "#ef4444" : "#16a34a" }, children: d })
+            /* @__PURE__ */ i.jsx("strong", { style: { color: pe > 0 ? "#ef4444" : "#16a34a" }, children: pe })
           ] })
         ] })
       ]
     }
   );
 }
-const _e = (n, a) => n.length > a ? n.slice(n.length - a) : n, vt = (n, a) => ({
-  sessionId: n,
+const nt = (a, l) => a.length > l ? a.slice(a.length - l) : a, Rt = (a, l) => ({
+  sessionId: a,
   sessionType: "coding-assessment",
   startTime: Date.now(),
-  preCheckResults: a,
+  preCheckResults: l,
   liveEvents: [],
   codingMetrics: {
     totalKeystrokes: 0,
@@ -978,149 +1316,149 @@ const _e = (n, a) => n.length > a ? n.slice(n.length - a) : n, vt = (n, a) => ({
     copyCutPasteAttempts: 0
   }
 });
-function bt(n, a) {
-  switch (a.eventType) {
+function _t(a, l) {
+  switch (l.eventType) {
     case "tab_switch":
-      return { ...n, tabSwitches: n.tabSwitches + 1, violationCount: n.violationCount + 1 };
+      return { ...a, tabSwitches: a.tabSwitches + 1, violationCount: a.violationCount + 1 };
     case "audio_anomaly":
-      return { ...n, audioAnomalies: n.audioAnomalies + 1, violationCount: n.violationCount + 1 };
+      return { ...a, audioAnomalies: a.audioAnomalies + 1, violationCount: a.violationCount + 1 };
     case "code_execution":
-      return { ...n, codeExecutionCount: n.codeExecutionCount + 1 };
+      return { ...a, codeExecutionCount: a.codeExecutionCount + 1 };
     case "face_detection": {
-      const r = a.data?.reason;
-      return r === "no_face" ? { ...n, noFaceIncidents: n.noFaceIncidents + 1, violationCount: n.violationCount + 1 } : r === "multiple_faces" ? { ...n, multipleFaceIncidents: n.multipleFaceIncidents + 1, violationCount: n.violationCount + 1 } : n;
+      const o = l.data?.reason;
+      return o === "no_face" ? { ...a, noFaceIncidents: a.noFaceIncidents + 1, violationCount: a.violationCount + 1 } : o === "multiple_faces" ? { ...a, multipleFaceIncidents: a.multipleFaceIncidents + 1, violationCount: a.violationCount + 1 } : a;
     }
     case "gaze_tracking": {
-      const r = a.data?.type === "focus_break", f = Number(a.data?.focusTimeMs) || 0, u = a.data?.offscreen === !0;
+      const o = l.data?.type === "focus_break", y = Number(l.data?.focusTimeMs) || 0, x = l.data?.offscreen === !0;
       return {
-        ...n,
-        focusBreaks: n.focusBreaks + (r ? 1 : 0),
-        gazeDuration: n.gazeDuration + f,
-        unfocusEvents: n.unfocusEvents + (r ? 1 : 0),
-        gazeOffScreenIncidents: n.gazeOffScreenIncidents + (u ? 1 : 0),
-        violationCount: n.violationCount + (r || u ? 1 : 0)
+        ...a,
+        focusBreaks: a.focusBreaks + (o ? 1 : 0),
+        gazeDuration: a.gazeDuration + y,
+        unfocusEvents: a.unfocusEvents + (o ? 1 : 0),
+        gazeOffScreenIncidents: a.gazeOffScreenIncidents + (x ? 1 : 0),
+        violationCount: a.violationCount + (o || x ? 1 : 0)
       };
     }
     case "keystroke": {
-      const r = a.data?.copyCutPaste === !0;
+      const o = l.data?.copyCutPaste === !0;
       return {
-        ...n,
-        keystrokes: n.keystrokes + 1,
-        copyCutPasteAttempts: n.copyCutPasteAttempts + (r ? 1 : 0),
-        violationCount: n.violationCount + (r ? 1 : 0)
+        ...a,
+        keystrokes: a.keystrokes + 1,
+        copyCutPasteAttempts: a.copyCutPasteAttempts + (o ? 1 : 0),
+        violationCount: a.violationCount + (o ? 1 : 0)
       };
     }
     default:
-      return n;
+      return a;
   }
 }
-function xt(n, a) {
-  switch (a.type) {
+function kt(a, l) {
+  switch (l.type) {
     case "INIT":
-      return { ...a.payload };
+      return { ...l.payload };
     case "SET_FIELDS": {
-      const r = { ...n, ...a.payload };
-      return r.snapshots && (r.snapshots = _e(r.snapshots, 50)), r.liveEvents && (r.liveEvents = _e(r.liveEvents, 200)), r;
+      const o = { ...a, ...l.payload };
+      return o.snapshots && (o.snapshots = nt(o.snapshots, 50)), o.liveEvents && (o.liveEvents = nt(o.liveEvents, 200)), o;
     }
     case "ADD_EVENTS": {
-      const r = _e([...n.liveEvents, ...a.events], 200), f = a.events.reduce(bt, n.sessionStats);
-      return { ...n, liveEvents: r, sessionStats: f };
+      const o = nt([...a.liveEvents, ...l.events], 200), y = l.events.reduce(_t, a.sessionStats);
+      return { ...a, liveEvents: o, sessionStats: y };
     }
     case "ADD_SNAPSHOT": {
-      const r = _e([...n.snapshots, a.snapshot], 50);
-      return { ...n, snapshots: r };
+      const o = nt([...a.snapshots, l.snapshot], 50);
+      return { ...a, snapshots: o };
     }
     case "TICK": {
-      const r = Math.max(0, a.now - n.startTime);
-      return r === n.sessionStats.totalDuration ? n : { ...n, sessionStats: { ...n.sessionStats, totalDuration: r } };
+      const o = Math.max(0, l.now - a.startTime);
+      return o === a.sessionStats.totalDuration ? a : { ...a, sessionStats: { ...a.sessionStats, totalDuration: o } };
     }
     case "COMPLETE": {
-      const r = a.endTime ?? Date.now();
-      return { ...n, sessionStats: { ...n.sessionStats, totalDuration: Math.max(0, r - n.startTime) } };
+      const o = l.endTime ?? Date.now();
+      return { ...a, sessionStats: { ...a.sessionStats, totalDuration: Math.max(0, o - a.startTime) } };
     }
     default:
-      return n;
+      return a;
   }
 }
-function St(n) {
-  const [a, r] = m(null), f = P((p) => {
-    r((g) => g && xt(g, p));
-  }, []), u = E(null), C = E(0), _ = E(null), A = P((p) => {
-    const g = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    u.current = g;
-    const z = sessionStorage.getItem(g);
-    if (z)
+function Tt(a) {
+  const [l, o] = b(null), y = Y((f) => {
+    o((v) => v && kt(v, f));
+  }, []), x = P(null), N = P(0), L = P(null), j = Y((f) => {
+    const v = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    x.current = v;
+    const $ = sessionStorage.getItem(v);
+    if ($)
       try {
-        const M = JSON.parse(z);
-        return r(M), g;
+        const V = JSON.parse($);
+        return o(V), v;
       } catch {
       }
-    const q = vt(g, p);
-    return r(q), sessionStorage.setItem(g, JSON.stringify(q)), g;
-  }, [n?.sessionId]), w = P((p) => {
-    const g = p ?? a;
-    if (!(!g || !u.current))
+    const W = Rt(v, f);
+    return o(W), sessionStorage.setItem(v, JSON.stringify(W)), v;
+  }, [a?.sessionId]), g = Y((f) => {
+    const v = f ?? l;
+    if (!(!v || !x.current))
       try {
-        sessionStorage.setItem(u.current, JSON.stringify(g)), C.current = Date.now();
-      } catch (z) {
-        console.error("[session] persist failed", z);
+        sessionStorage.setItem(x.current, JSON.stringify(v)), N.current = Date.now();
+      } catch ($) {
+        console.error("[session] persist failed", $);
       }
-  }, [a]);
-  return ee(() => {
-    if (!a) return;
-    const g = Date.now() - C.current;
-    return g < 1e3 ? (_.current && clearTimeout(_.current), _.current = setTimeout(() => w(), 1e3 - g)) : w(), () => {
-      _.current && clearTimeout(_.current);
+  }, [l]);
+  return te(() => {
+    if (!l) return;
+    const v = Date.now() - N.current;
+    return v < 1e3 ? (L.current && clearTimeout(L.current), L.current = setTimeout(() => g(), 1e3 - v)) : g(), () => {
+      L.current && clearTimeout(L.current);
     };
-  }, [a, w]), ee(() => {
-    const p = () => w();
-    return window.addEventListener("visibilitychange", p), window.addEventListener("beforeunload", p), () => {
-      window.removeEventListener("visibilitychange", p), window.removeEventListener("beforeunload", p);
+  }, [l, g]), te(() => {
+    const f = () => g();
+    return window.addEventListener("visibilitychange", f), window.addEventListener("beforeunload", f), () => {
+      window.removeEventListener("visibilitychange", f), window.removeEventListener("beforeunload", f);
     };
-  }, [w]), ee(() => {
-    if (!a) return;
-    const p = setInterval(() => f({ type: "TICK", now: Date.now() }), 1e3);
-    return () => clearInterval(p);
-  }, [a, f]), dt(() => ({
-    state: a,
-    sessionId: u.current,
-    init: A,
-    setFields: (p) => f({ type: "SET_FIELDS", payload: p }),
-    addEvents: (p) => f({ type: "ADD_EVENTS", events: p }),
-    addSnapshot: (p) => f({ type: "ADD_SNAPSHOT", snapshot: p }),
-    complete: () => f({ type: "COMPLETE" })
-  }), [a, f, A]);
+  }, [g]), te(() => {
+    if (!l) return;
+    const f = setInterval(() => y({ type: "TICK", now: Date.now() }), 1e3);
+    return () => clearInterval(f);
+  }, [l, y]), yt(() => ({
+    state: l,
+    sessionId: x.current,
+    init: j,
+    setFields: (f) => y({ type: "SET_FIELDS", payload: f }),
+    addEvents: (f) => y({ type: "ADD_EVENTS", events: f }),
+    addSnapshot: (f) => y({ type: "ADD_SNAPSHOT", snapshot: f }),
+    complete: () => y({ type: "COMPLETE" })
+  }), [l, y, j]);
 }
-function Ct({ onSessionStart: n, onSessionUpdate: a, onEvent: r }) {
-  const [f, u] = m(null), [C, _] = m("optimal"), A = St();
-  return ee(() => {
-    if (f && !A.state) {
-      const w = A.init(f);
-      n?.(w, f);
+function Dt({ onSessionStart: a, onSessionUpdate: l, onEvent: o }) {
+  const [y, x] = b(null), [N, L] = b("optimal"), j = Tt();
+  return te(() => {
+    if (y && !j.state) {
+      const g = j.init(y);
+      a?.(g, y);
     }
-  }, [f, A]), f ? /* @__PURE__ */ o.jsx(
-    wt,
+  }, [y, j]), y ? /* @__PURE__ */ i.jsx(
+    Ct,
     {
-      monitoringStatus: C,
-      sessionData: A.state ?? void 0,
-      onStatusChange: (w) => _(w),
-      onUpdateSession: (w) => {
-        A.setFields(w), a?.(w);
+      monitoringStatus: N,
+      sessionData: j.state ?? void 0,
+      onStatusChange: (g) => L(g),
+      onUpdateSession: (g) => {
+        j.setFields(g), l?.(g);
       },
-      onAddEvent: (w) => {
-        A.addEvents([{ ...w, timestamp: w.timestamp ?? Date.now() }]), r?.(w);
+      onAddEvent: (g) => {
+        j.addEvents([{ ...g, timestamp: g.timestamp ?? Date.now() }]), o?.(g);
       }
     }
-  ) : /* @__PURE__ */ o.jsx(
-    gt,
+  ) : /* @__PURE__ */ i.jsx(
+    St,
     {
-      onComplete: (w) => u(w),
-      onError: () => u(null)
+      onComplete: (g) => x(g),
+      onError: () => x(null)
     }
   );
 }
 export {
-  wt as FloatingVideo,
-  gt as Prechecks,
-  Ct as ProctoringWidget
+  Ct as FloatingVideo,
+  St as Prechecks,
+  Dt as ProctoringWidget
 };

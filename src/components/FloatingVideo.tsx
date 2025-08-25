@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useRef, useEffect, useCallback } from "react"
 import type { MonitoringStatus, SessionData } from "../types/proctoring"
 import { useAudioMonitor } from "../hooks/useAudioMonitor"

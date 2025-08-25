@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect, useCallback, useRef } from "react"
 import type { PreCheckResults } from "../types/proctoring"
 import { createMicMeter } from "../lib/audio/meter"
@@ -22,9 +20,11 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 	})
 	const [faceDetectionFrames, setFaceDetectionFrames] = useState(0)
 	const [micLevel, setMicLevel] = useState(0)
-	const [needsWindowPermission, setNeedsWindowPermission] = useState(false)
-	const [windowPermissionState, setWindowPermissionState] = useState<PermissionState | 'unsupported' | null>(null)
+	// Enforce single-monitor setup. We'll try to request accurate display info via
+	// getScreenDetails. If the browser requires a user gesture, we'll ask on the
+	// next click/keydown automatically (no explicit button).
 	const [errorsByStep, setErrorsByStep] = useState<Record<StepId, string>>({} as any)
+	const [awaitingDisplayPermission, setAwaitingDisplayPermission] = useState(false)
 	const [partialResults, setPartialResults] = useState<Partial<PreCheckResults>>({})
 
 	const camStreamRef = useRef<MediaStream | null>(null)
@@ -32,8 +32,7 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 	const micMeterRef = useRef<ReturnType<typeof createMicMeter> | null>(null)
 	const animRef = useRef<number | null>(null)
 	const videoRef = useRef<HTMLVideoElement | null>(null)
-		const userGestureResolverRef = useRef<((value: unknown) => void) | null>(null)
-		const screenCountAfterPromptRef = useRef<number | null>(null)
+		// no-op refs removed: we don't prompt for window-management permission anymore
 
 	const stopStreamsAndMeter = () => {
 		try {
@@ -97,17 +96,6 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 		return { status, confidence, timestamp: Date.now() }
 	}
 
-		const requestWindowManagementPermission = async (): Promise<PermissionState | 'unsupported'> => {
-			try {
-				if (!('permissions' in navigator)) return 'unsupported'
-				// @ts-ignore experimental
-				const perm = await navigator.permissions.query({ name: 'window-management' as any })
-				return perm.state as PermissionState
-			} catch {
-				return 'unsupported'
-			}
-		}
-
 		const estimateScreenCount = (): number => {
 			try {
 				const screenWidth = window.screen.width
@@ -124,48 +112,44 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 			}
 		}
 
-		const handleRequestWindowPermission = async () => {
-			try {
-				if ('getScreenDetails' in window) {
-					// @ts-ignore experimental
-					const screenDetails = await (window as any).getScreenDetails()
-					screenCountAfterPromptRef.current = screenDetails.screens.length
-				} else {
-					screenCountAfterPromptRef.current = null
-				}
-			} catch {
-				screenCountAfterPromptRef.current = null
-			} finally {
-				userGestureResolverRef.current?.(true)
-				userGestureResolverRef.current = null
-				setNeedsWindowPermission(false)
-			}
-		}
-
 		const checkMonitorCount = async (): Promise<number> => {
 			try {
 				if (!window.isSecureContext) return estimateScreenCount()
-				if ('permissions' in navigator) {
+				// If available and already allowed by the browser, getScreenDetails will work without extra UI
+				if ('getScreenDetails' in window) {
 					try {
-						// @ts-ignore experimental name
-						const permission = await navigator.permissions.query({ name: 'window-management' as any })
-						setWindowPermissionState(permission.state as PermissionState)
-						if (permission.state === 'granted') {
-							if ('getScreenDetails' in window) {
-								const details = await (window as any).getScreenDetails()
-								return details.screens.length
-							}
-						} else if (permission.state === 'prompt') {
-							setNeedsWindowPermission(true)
-							await new Promise((resolve) => { userGestureResolverRef.current = resolve })
-							setNeedsWindowPermission(false)
-							if (screenCountAfterPromptRef.current != null) {
-								const count = screenCountAfterPromptRef.current
-								screenCountAfterPromptRef.current = null
+						const details = await (window as any).getScreenDetails()
+						return details.screens.length
+					} catch (err: any) {
+						// If permission is not granted and a user gesture is required, await next user activation
+						const needsActivation = err?.name === 'NotAllowedError' || err?.name === 'SecurityError'
+						if (needsActivation) {
+							setAwaitingDisplayPermission(true)
+							try {
+								const count = await new Promise<number>((resolve) => {
+									const handler = async () => {
+										cleanup()
+										try {
+											const d = await (window as any).getScreenDetails()
+											resolve(d.screens.length)
+										} catch {
+											resolve(estimateScreenCount())
+										}
+									}
+									const cleanup = () => {
+										window.removeEventListener('pointerdown', handler)
+										window.removeEventListener('keydown', handler)
+									}
+									window.addEventListener('pointerdown', handler, { once: true })
+									window.addEventListener('keydown', handler, { once: true })
+								})
 								return count
+							} finally {
+								setAwaitingDisplayPermission(false)
 							}
 						}
-					} catch {}
+						// fall through to heuristic otherwise
+					}
 				}
 				return estimateScreenCount()
 			} catch {
@@ -278,17 +262,18 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 		setStepStatus('monitor', 'running')
 		setErrorsByStep((p) => ({ ...p, monitor: '' }))
 		try {
-			try {
-				setWindowPermissionState(await requestWindowManagementPermission())
-			} catch {}
 			const count = await checkMonitorCount()
-			// We consider this step passed if we could get a count (>=1)
-			if (count && count >= 1) {
+			// Enforce single monitor: fail if more than one is connected
+			if (count && count > 1) {
+				setPartialResults((r) => ({ ...r, monitorCount: count }))
+				throw new Error('Multiple displays detected. Please remove external screens and keep only one display connected, then press Retry.')
+			}
+			if (count === 1) {
 				setPartialResults((r) => ({ ...r, monitorCount: count }))
 				setStepStatus('monitor', 'passed')
 				return true
 			}
-			throw new Error('Could not verify monitors')
+			throw new Error('Could not verify displays')
 		} catch (err: any) {
 			setErrorsByStep((p) => ({ ...p, monitor: err?.message || 'Monitor verification failed' }))
 			setStepStatus('monitor', 'failed')
@@ -386,7 +371,7 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 					</div>
 					<div style={{ display: "grid", gap: 8 }}>
 						{stepOrder.map((id) => {
-							const label = id === 'camera' ? 'Camera Access' : id === 'microphone' ? 'Microphone Access' : id === 'face' ? 'Face Detection' : id === 'monitor' ? 'Monitor Verification' : 'Browser Support'
+							const label = id === 'camera' ? 'Camera Access' : id === 'microphone' ? 'Microphone Access' : id === 'face' ? 'Face Detection' : id === 'monitor' ? 'Single Monitor Check' : 'Browser Support'
 							const status = statusByStep[id]
 							const bg = status === 'passed' ? '#ecfdf5' : status === 'running' ? '#eff6ff' : status === 'failed' ? '#fef2f2' : '#f9fafb'
 							const dot = status === 'passed' ? '#10b981' : status === 'running' ? '#3b82f6' : status === 'failed' ? '#dc2626' : '#9ca3af'
@@ -408,15 +393,13 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 												<div style={{ width: `${Math.min(100, Math.round(micLevel * 200))}%`, height: 8, background: '#10b981', transition: 'width 150ms' }} />
 											</div>
 										)}
+										{awaitingDisplayPermission && id === 'monitor' && (status === 'running' || status === 'pending') && (
+											<div style={{ marginTop: 6, color: '#6b7280', fontSize: 12 }}>Requesting display info… click anywhere or press a key to continue.</div>
+										)}
 										{errorsByStep[id] && (
 											<div style={{ marginTop: 6, color: '#dc2626', fontSize: 12 }}>{errorsByStep[id]}</div>
 										)}
-										{id === 'monitor' && (status === 'running' || status === 'pending') && needsWindowPermission && (
-											<div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-												<span style={{ fontSize: 12, color: '#6b7280' }}>Enable multi-screen detection</span>
-												<button onClick={handleRequestWindowPermission} style={{ fontSize: 12, padding: '6px 10px', borderRadius: 6, background: '#3b82f6', color: '#fff', border: 0 }}>Allow Window Management</button>
-											</div>
-										)}
+										{/* No allow-management UI; we show an error if multiple screens are found */}
 									</div>
 									<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 										<div style={{ fontSize: 12, padding: '2px 8px', borderRadius: 9999, background: status === 'passed' ? '#111827' : status === 'failed' ? '#fee2e2' : '#e5e7eb', color: status === 'passed' ? '#fff' : '#111827' }}>
