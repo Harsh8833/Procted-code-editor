@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import type { MonitoringStatus, SessionData } from "../types/proctoring"
 import { useAudioMonitor } from "../hooks/useAudioMonitor"
 
-type FaceDetection = { x: number; y: number; width: number; height: number; confidence: number }
+type FaceDetection = { x: number; y: number; width: number; height: number; confidence: number; landmarks?: [number, number][] }
 type PostureAnalysis = { isGoodPosture: boolean; shoulderAlignment: number; headTilt: number; confidence: number }
 type ExpressionAnalysis = { dominant: string; confidence: number; emotions: Record<string, number> }
 type AttireAnalysis = { isProfessional: boolean; hasShirt: boolean; confidence: number; details: string }
@@ -11,6 +11,13 @@ type EyeContactAnalysis = {
 	gazeDirection: { x: number; y: number }
 	confidence: number
 	attentionScore: number
+}
+type HeadPoseAnalysis = {
+	yaw: number // left/right in degrees (+ right, - left)
+	pitch: number // up/down in degrees (+ up, - down)
+	roll: number // tilt in degrees (+ clockwise)
+	isHeadTurned: boolean
+	confidence: number
 }
 
 export type FloatingVideoProps = {
@@ -149,10 +156,61 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 		return { isLookingAtCamera, gazeDirection: { x: gazeX, y: gazeY }, confidence: 0.8, attentionScore }
 	}, [])
 
-	const analyzeGazeTracking = useCallback((eyeContact: EyeContactAnalysis) => {
+	const analyzeHeadPose = useCallback((face: FaceDetection): HeadPoseAnalysis | null => {
+		if (!face.landmarks || face.landmarks.length < 4) return null
+		// BlazeFace landmark order: [rightEye, leftEye, nose, mouth, rightEar, leftEar]
+		const lm = face.landmarks
+		const rightEye = lm[0]
+		const leftEye = lm[1]
+		const nose = lm[2]
+		const mouth = lm[3] ?? [(leftEye[0] + rightEye[0]) / 2, Math.max(leftEye[1], rightEye[1]) + face.height * 0.2]
+		const eyeMid: [number, number] = [(leftEye[0] + rightEye[0]) / 2, (leftEye[1] + rightEye[1]) / 2]
+
+		const dxEye = leftEye[0] - rightEye[0]
+		const dyEye = leftEye[1] - rightEye[1]
+		const eyeDist = Math.max(1, Math.hypot(dxEye, dyEye))
+
+		// Roll: angle of the eyes line
+		const roll = (Math.atan2(dyEye, dxEye) * 180) / Math.PI
+
+		// Yaw: relative difference of nose-to-eye distances normalized by eye distance
+		const dNR = Math.hypot(nose[0] - rightEye[0], nose[1] - rightEye[1])
+		const dNL = Math.hypot(nose[0] - leftEye[0], nose[1] - leftEye[1])
+		const yawRatio = (dNR - dNL) / eyeDist // + means turned right (looking left), - means turned left
+		// Convert to a rough degree estimate (heuristic scale)
+		const yaw = Math.max(-45, Math.min(45, yawRatio * 90))
+
+		// Pitch: compare vertical layout eyes->nose vs nose->mouth
+		const eyesToNoseY = Math.max(1, nose[1] - eyeMid[1])
+		const noseToMouthY = Math.max(1, (mouth[1] ?? eyeMid[1]) - nose[1])
+		const pitchRatio = (eyesToNoseY - noseToMouthY) / face.height
+		// Positive pitch means up, negative means down (heuristic)
+		const pitch = Math.max(-45, Math.min(45, pitchRatio * 180))
+
+		// Determine if head is turned meaningfully
+		const rollOff = Math.abs(roll) > 20
+		const yawOff = Math.abs(yawRatio) > 0.18 // ~>20-25 degrees
+		const pitchOff = Math.abs(pitch) > 15
+		const isHeadTurned = yawOff || pitchOff || rollOff
+
+		// Confidence grows with stronger signals
+		const confidence = Math.max(0.5, Math.min(1, Math.max(
+			Math.abs(yawRatio) * 2,
+			Math.abs(roll) / 30,
+			Math.abs(pitch) / 30,
+		)))
+		return { yaw, pitch, roll, isHeadTurned, confidence }
+	}, [])
+
+	const analyzeGazeTracking = useCallback((eyeContact: EyeContactAnalysis, headPose: HeadPoseAnalysis | null) => {
 		const { gazeDirection, attentionScore, isLookingAtCamera } = eyeContact
 		const gazeDistance = Math.sqrt(gazeDirection.x * gazeDirection.x + gazeDirection.y * gazeDirection.y)
-		return !isLookingAtCamera && gazeDistance > 0.5 && attentionScore < 0.3
+		const baseOff = !isLookingAtCamera && gazeDistance > 0.5 && attentionScore < 0.3
+		if (headPose) {
+			// Consider head orientation even if face center remains
+			if (headPose.isHeadTurned && headPose.confidence >= 0.6) return true
+		}
+		return baseOff
 	}, [])
 
 	const initializeFaceDetection = useCallback(async () => {
@@ -192,7 +250,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					.map((p: any) => {
 						const [x, y] = p.topLeft
 						const [x2, y2] = p.bottomRight
-						return { x, y, width: x2 - x, height: y2 - y, confidence: p.probability?.[0] || 0.8 }
+						return { x, y, width: x2 - x, height: y2 - y, confidence: p.probability?.[0] || 0.8, landmarks: p.landmarks as [number, number][] | undefined }
 					})
 					.filter((f: FaceDetection) => {
 						if (f.width <= 0 || f.height <= 0) return false
@@ -270,11 +328,12 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					const expression = analyzeExpression(faceRegion, face)
 					const attire = analyzeAttire(faceRegion, fullFrame)
 					const eyeContact = analyzeEyeContact(face, canvas.width, canvas.height)
+					const headPose = analyzeHeadPose(face)
 					setPostureAnalysis(posture)
 					setExpressionAnalysis(expression)
 					setAttireAnalysis(attire)
 					setEyeContactAnalysis(eyeContact)
-					const off = analyzeGazeTracking(eyeContact)
+					const off = analyzeGazeTracking(eyeContact, headPose)
 					if (off && !isLookingOffScreen && Date.now() - gazeCooldownRef.current > 3000) {
 						setGazeOffScreenCount((p) => p + 1)
 						setIsLookingOffScreen(true)
@@ -282,7 +341,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 						gazeCooldownRef.current = Date.now()
 						if (!incidentRef.current.gazeOff) {
 							incidentRef.current.gazeOff = true
-							onAddEvent?.({ eventType: "gaze_tracking", severity: "warning", context: "coding", data: { offscreen: true }, timestamp: now })
+							onAddEvent?.({ eventType: "gaze_tracking", severity: "warning", context: "coding", data: { offscreen: true, reason: headPose?.isHeadTurned ? "head_movement" : "center_offset", headPose }, timestamp: now })
 						}
 					} else if (!off && isLookingOffScreen) {
 						if (gazeOffScreenStartTime !== null) {

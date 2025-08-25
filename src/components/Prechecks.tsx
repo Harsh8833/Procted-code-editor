@@ -20,11 +20,8 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 	})
 	const [faceDetectionFrames, setFaceDetectionFrames] = useState(0)
 	const [micLevel, setMicLevel] = useState(0)
-	// Enforce single-monitor setup. We'll try to request accurate display info via
-	// getScreenDetails. If the browser requires a user gesture, we'll ask on the
-	// next click/keydown automatically (no explicit button).
+	// Enforce single-monitor setup using a heuristic only (no permissions requested).
 	const [errorsByStep, setErrorsByStep] = useState<Record<StepId, string>>({} as any)
-	const [awaitingDisplayPermission, setAwaitingDisplayPermission] = useState(false)
 	const [partialResults, setPartialResults] = useState<Partial<PreCheckResults>>({})
 
 	const camStreamRef = useRef<MediaStream | null>(null)
@@ -113,48 +110,8 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 		}
 
 		const checkMonitorCount = async (): Promise<number> => {
-			try {
-				if (!window.isSecureContext) return estimateScreenCount()
-				// If available and already allowed by the browser, getScreenDetails will work without extra UI
-				if ('getScreenDetails' in window) {
-					try {
-						const details = await (window as any).getScreenDetails()
-						return details.screens.length
-					} catch (err: any) {
-						// If permission is not granted and a user gesture is required, await next user activation
-						const needsActivation = err?.name === 'NotAllowedError' || err?.name === 'SecurityError'
-						if (needsActivation) {
-							setAwaitingDisplayPermission(true)
-							try {
-								const count = await new Promise<number>((resolve) => {
-									const handler = async () => {
-										cleanup()
-										try {
-											const d = await (window as any).getScreenDetails()
-											resolve(d.screens.length)
-										} catch {
-											resolve(estimateScreenCount())
-										}
-									}
-									const cleanup = () => {
-										window.removeEventListener('pointerdown', handler)
-										window.removeEventListener('keydown', handler)
-									}
-									window.addEventListener('pointerdown', handler, { once: true })
-									window.addEventListener('keydown', handler, { once: true })
-								})
-								return count
-							} finally {
-								setAwaitingDisplayPermission(false)
-							}
-						}
-						// fall through to heuristic otherwise
-					}
-				}
-				return estimateScreenCount()
-			} catch {
-				return 1
-			}
+			// Heuristic-only detection; do not request window-management permission
+			return estimateScreenCount()
 		}
 
 	const checkBrowserSupport = (): boolean => {
@@ -392,9 +349,6 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 											<div style={{ marginTop: 6, width: 220, height: 8, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden' }}>
 												<div style={{ width: `${Math.min(100, Math.round(micLevel * 200))}%`, height: 8, background: '#10b981', transition: 'width 150ms' }} />
 											</div>
-										)}
-										{awaitingDisplayPermission && id === 'monitor' && (status === 'running' || status === 'pending') && (
-											<div style={{ marginTop: 6, color: '#6b7280', fontSize: 12 }}>Requesting display info… click anywhere or press a key to continue.</div>
 										)}
 										{errorsByStep[id] && (
 											<div style={{ marginTop: 6, color: '#dc2626', fontSize: 12 }}>{errorsByStep[id]}</div>
