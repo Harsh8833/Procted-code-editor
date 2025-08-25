@@ -181,12 +181,33 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 			return
 		}
 		try {
-			const predictions: any[] = await faceDetectorRef.current.estimateFaces(video, false)
-			const faces: FaceDetection[] = predictions.map((p: any) => {
-				const [x, y] = p.topLeft
-				const [x2, y2] = p.bottomRight
-				return { x, y, width: x2 - x, height: y2 - y, confidence: p.probability?.[0] || 0.8 }
-			})
+				const predictions: any[] = await faceDetectorRef.current.estimateFaces(video, false)
+				const vw = (video as any).videoWidth || video.width || canvas.width
+				const vh = (video as any).videoHeight || video.height || canvas.height
+				const marginX = Math.max(6, Math.floor(vw * 0.06))
+				const marginY = Math.max(6, Math.floor(vh * 0.06))
+				const minAreaRatio = 0.04
+				const maxAreaRatio = 0.65
+				const faces: FaceDetection[] = predictions
+					.map((p: any) => {
+						const [x, y] = p.topLeft
+						const [x2, y2] = p.bottomRight
+						return { x, y, width: x2 - x, height: y2 - y, confidence: p.probability?.[0] || 0.8 }
+					})
+					.filter((f: FaceDetection) => {
+						if (f.width <= 0 || f.height <= 0) return false
+						// fully inside with margins
+						if (f.x < marginX || f.y < marginY) return false
+						if (f.x + f.width > vw - marginX || f.y + f.height > vh - marginY) return false
+						// reasonable size
+						const area = f.width * f.height
+						const areaRatio = area / (vw * vh)
+						if (areaRatio < minAreaRatio || areaRatio > maxAreaRatio) return false
+						// reasonable aspect ratio
+						const ar = f.width / f.height
+						if (ar < 0.6 || ar > 1.6) return false
+						return true
+					})
 			setFaceCount(faces.length)
 			setDetections(faces)
 			setIsStable(faces.length === 1)
