@@ -1,5 +1,3 @@
-"use client"
-
 import { useEffect, useState } from "react"
 import { Prechecks } from "../components/Prechecks"
 import { FloatingVideo } from "../components/FloatingVideo"

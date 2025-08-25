@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect, useCallback, useRef } from "react"
 import type { PreCheckResults } from "../types/proctoring"
 import { createMicMeter } from "../lib/audio/meter"
