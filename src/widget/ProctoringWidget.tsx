@@ -40,6 +40,7 @@ export function ProctoringWidget({ onSessionStart, onSessionUpdate, onEvent }: P
 					store.setFields(u)
 					onSessionUpdate?.(u)
 				}}
+				onAddSnapshot={(snap) => store.addSnapshot(snap)}
 				onAddEvent={(e) => {
 					store.addEvents([{ ...e, timestamp: e.timestamp ?? Date.now() }])
 					onEvent?.(e)

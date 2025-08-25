@@ -26,9 +26,10 @@ export type FloatingVideoProps = {
 	onStatusChange?: (status: MonitoringStatus) => void
 	onUpdateSession?: (updates: Partial<SessionData>) => void
 	onAddEvent?: (event: any) => void
+	onAddSnapshot?: (snapshot: SessionData["snapshots"][number]) => void
 }
 
-export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, onUpdateSession, onAddEvent }: FloatingVideoProps) {
+export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, onUpdateSession, onAddEvent, onAddSnapshot }: FloatingVideoProps) {
 	const [position, setPosition] = useState({ x: typeof window !== 'undefined' ? window.innerWidth - 280 : 0, y: typeof window !== 'undefined' ? window.innerHeight - 400 : 0 })
 	const [isDragging, setIsDragging] = useState(false)
 	const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
@@ -38,7 +39,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	const [postureAnalysis, setPostureAnalysis] = useState<PostureAnalysis | null>(null)
 	const [expressionAnalysis, setExpressionAnalysis] = useState<ExpressionAnalysis | null>(null)
 	const [attireAnalysis, setAttireAnalysis] = useState<AttireAnalysis | null>(null)
-	const [eyeContactAnalysis, setEyeContactAnalysis] = useState<EyeContactAnalysis | null>(null)
+	// Removed eyeContactAnalysis from UI; compute locally only for gaze-off logic
 	const [audioLevel, setAudioLevel] = useState(0)
 	const [audioAnomalyCount, setAudioAnomalyCount] = useState(0)
 	const [detections, setDetections] = useState<FaceDetection[]>([])
@@ -72,6 +73,17 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	const lastFaceStateRef = useRef<"none" | "single" | "multiple">("none")
 	const consecutiveFramesRef = useRef({ noFace: 0, multipleFaces: 0 })
 	const incidentRef = useRef({ noFace: false, multipleFaces: false, gazeOff: false })
+
+	// Random snapshot scheduling (capture 5 random webcam images during the session)
+	const randomSnapshotTimersRef = useRef<number[]>([])
+	const randomSnapshotsTakenRef = useRef(0)
+	const snapshotInFlightRef = useRef(false)
+
+	// Posture smoothing state (EMA + hysteresis)
+	const postureEMARef = useRef<{ yaw: number; pitch: number; roll: number; initialized: boolean }>({ yaw: 0, pitch: 0, roll: 0, initialized: false })
+	const postureStateRef = useRef<{ isGood: boolean; goodStreak: number; poorStreak: number }>({ isGood: true, goodStreak: 0, poorStreak: 0 })
+	const POSTURE_SWITCH_STREAK = 8 // frames required to switch Good<->Poor
+	const POSTURE_EMA_ALPHA = 0.25 // smoothing factor for pose angles
 
 	const { level: audioLevelPct, anomalyCount, start: startAudio, stop: stopAudio, setFaceDetected } = useAudioMonitor({
 		context: "coding",
@@ -202,6 +214,64 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 		return { yaw, pitch, roll, isHeadTurned, confidence }
 	}, [])
 
+	// Capture current video frame to dataURL (jpeg)
+	const captureCurrentFrame = useCallback((quality = 0.8): string | null => {
+		const video = videoRef.current
+		const canvas = canvasRef.current
+		if (!video || !canvas) return null
+		const vw = (video as any).videoWidth || 320
+		const vh = (video as any).videoHeight || 240
+		if (!vw || !vh || video.readyState < 2) return null
+		// Resize backing canvas to match source, draw, and export
+		canvas.width = vw
+		canvas.height = vh
+		const ctx = canvas.getContext("2d")
+		if (!ctx) return null
+		ctx.drawImage(video, 0, 0, vw, vh)
+		try {
+			return canvas.toDataURL("image/jpeg", quality)
+		} catch {
+			return null
+		}
+	}, [])
+
+	// Add a snapshot into session via onUpdateSession, with rolling cap
+	const appendSnapshot = useCallback((snapshot: { timestamp: number; type: "random_webcam" | "code_editor" | "violation_trigger"; image: string; context: string }) => {
+		if (onAddSnapshot) {
+			onAddSnapshot(snapshot as SessionData["snapshots"][number])
+			return
+		}
+		if (onUpdateSession) {
+			const current = sessionData?.snapshots || []
+			let next = [...current, snapshot]
+			if (next.length > 50) next = next.slice(next.length - 50)
+			onUpdateSession({ snapshots: next })
+		}
+	}, [onAddSnapshot, onUpdateSession, sessionData?.snapshots])
+
+	// Take one random webcam snapshot (retry once if video not ready)
+	const takeRandomSnapshot = useCallback(() => {
+		if (randomSnapshotsTakenRef.current >= 5 || snapshotInFlightRef.current) return
+		snapshotInFlightRef.current = true
+		const img = captureCurrentFrame(0.85)
+		if (img) {
+			appendSnapshot({ timestamp: Date.now(), type: "random_webcam", image: img, context: "Random webcam snapshot during coding" })
+			randomSnapshotsTakenRef.current += 1
+			snapshotInFlightRef.current = false
+			return
+		}
+		// If not ready, retry after short delay once
+		const id = window.setTimeout(() => {
+			const img2 = captureCurrentFrame(0.85)
+			if (img2) {
+				appendSnapshot({ timestamp: Date.now(), type: "random_webcam", image: img2, context: "Random webcam snapshot (retry) during coding" })
+				randomSnapshotsTakenRef.current += 1
+			}
+			snapshotInFlightRef.current = false
+		}, 3000)
+		randomSnapshotTimersRef.current.push(id)
+	}, [appendSnapshot, captureCurrentFrame])
+
 	const analyzeGazeTracking = useCallback((eyeContact: EyeContactAnalysis, headPose: HeadPoseAnalysis | null) => {
 		const { gazeDirection, attentionScore, isLookingAtCamera } = eyeContact
 		const gazeDistance = Math.sqrt(gazeDirection.x * gazeDirection.x + gazeDirection.y * gazeDirection.y)
@@ -281,6 +351,11 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					if (!incidentRef.current.multipleFaces) {
 						incidentRef.current.multipleFaces = true
 						onAddEvent?.({ eventType: "face_detection", severity: "warning", context: "coding", data: { reason: "multiple_faces", count: faces.length }, timestamp: now })
+						// Immediate snapshot on multiple faces
+						const img = captureCurrentFrame(0.85)
+						if (img) {
+							appendSnapshot({ timestamp: now, type: "violation_trigger", image: img, context: "Multiple faces detected" })
+						}
 					}
 				}
 			} else {
@@ -299,6 +374,11 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					if (!incidentRef.current.noFace) {
 						incidentRef.current.noFace = true
 						onAddEvent?.({ eventType: "face_detection", severity: "critical", context: "coding", data: { reason: "no_face" }, timestamp: now })
+						// Immediate snapshot on no face
+						const img = captureCurrentFrame(0.85)
+						if (img) {
+							appendSnapshot({ timestamp: now, type: "violation_trigger", image: img, context: "No face detected" })
+						}
 					}
 				}
 			} else {
@@ -319,21 +399,66 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 					const fullFrame = ctx.getImageData(0, 0, canvas.width, canvas.height)
 					const faceRegion = ctx.getImageData(face.x, face.y, face.width, face.height)
-					const posture: PostureAnalysis = {
-						isGoodPosture: Math.abs(Math.random() * 20 - 10) < 5,
-						shoulderAlignment: Math.random() * 20 - 10,
-						headTilt: Math.random() * 15 - 7.5,
-						confidence: 0.75,
+					// Head pose driven posture analysis with smoothing and hysteresis
+					let posture: PostureAnalysis = { isGoodPosture: true, shoulderAlignment: 0, headTilt: 0, confidence: 0.7 }
+					const headPose = analyzeHeadPose(face)
+					if (headPose) {
+						// Update EMA for yaw/pitch/roll to reduce jitter
+						if (!postureEMARef.current.initialized) {
+							postureEMARef.current = { yaw: headPose.yaw, pitch: headPose.pitch, roll: headPose.roll, initialized: true }
+						} else {
+							postureEMARef.current.yaw = POSTURE_EMA_ALPHA * headPose.yaw + (1 - POSTURE_EMA_ALPHA) * postureEMARef.current.yaw
+							postureEMARef.current.pitch = POSTURE_EMA_ALPHA * headPose.pitch + (1 - POSTURE_EMA_ALPHA) * postureEMARef.current.pitch
+							postureEMARef.current.roll = POSTURE_EMA_ALPHA * headPose.roll + (1 - POSTURE_EMA_ALPHA) * postureEMARef.current.roll
+						}
+
+						const yawE = postureEMARef.current.yaw
+						const pitchE = postureEMARef.current.pitch
+						const rollE = postureEMARef.current.roll
+
+						// Candidate classification using smoothed angles
+						const goodCandidate = Math.abs(rollE) <= 10 && Math.abs(pitchE) <= 12 && Math.abs(yawE) <= 18
+
+						// Hysteresis: require N consecutive frames to flip
+						if (goodCandidate !== postureStateRef.current.isGood) {
+							if (goodCandidate) {
+								postureStateRef.current.goodStreak += 1
+								postureStateRef.current.poorStreak = 0
+								if (postureStateRef.current.goodStreak >= POSTURE_SWITCH_STREAK) {
+									postureStateRef.current.isGood = true
+									postureStateRef.current.goodStreak = 0
+								}
+							} else {
+								postureStateRef.current.poorStreak += 1
+								postureStateRef.current.goodStreak = 0
+								if (postureStateRef.current.poorStreak >= POSTURE_SWITCH_STREAK) {
+									postureStateRef.current.isGood = false
+									postureStateRef.current.poorStreak = 0
+								}
+							}
+						} else {
+							// Stable classification, reset streaks
+							postureStateRef.current.goodStreak = 0
+							postureStateRef.current.poorStreak = 0
+						}
+
+						posture = {
+							isGoodPosture: postureStateRef.current.isGood,
+							// Use roll (tilt) as a proxy for shoulder alignment; smaller magnitude means better alignment
+							shoulderAlignment: -rollE,
+							headTilt: pitchE,
+							confidence: Math.min(1, 0.6 + 0.4 * headPose.confidence),
+						}
 					}
 					const expression = analyzeExpression(faceRegion, face)
 					const attire = analyzeAttire(faceRegion, fullFrame)
-					const eyeContact = analyzeEyeContact(face, canvas.width, canvas.height)
-					const headPose = analyzeHeadPose(face)
+					const eyeContact = analyzeEyeContact(face, canvas.width, canvas.height) // used only for gaze-off decision
+					// headPose already computed above for posture; compute if absent for gaze
+					const headPoseForGaze = headPose ?? analyzeHeadPose(face)
 					setPostureAnalysis(posture)
 					setExpressionAnalysis(expression)
 					setAttireAnalysis(attire)
-					setEyeContactAnalysis(eyeContact)
-					const off = analyzeGazeTracking(eyeContact, headPose)
+					const off = analyzeGazeTracking(eyeContact, headPoseForGaze)
 					if (off && !isLookingOffScreen && Date.now() - gazeCooldownRef.current > 3000) {
 						setGazeOffScreenCount((p) => p + 1)
 						setIsLookingOffScreen(true)
@@ -341,7 +466,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 						gazeCooldownRef.current = Date.now()
 						if (!incidentRef.current.gazeOff) {
 							incidentRef.current.gazeOff = true
-							onAddEvent?.({ eventType: "gaze_tracking", severity: "warning", context: "coding", data: { offscreen: true, reason: headPose?.isHeadTurned ? "head_movement" : "center_offset", headPose }, timestamp: now })
+							onAddEvent?.({ eventType: "gaze_tracking", severity: "warning", context: "coding", data: { offscreen: true, reason: headPoseForGaze?.isHeadTurned ? "head_movement" : "center_offset", headPose: headPoseForGaze }, timestamp: now })
 						}
 					} else if (!off && isLookingOffScreen) {
 						if (gazeOffScreenStartTime !== null) {
@@ -354,28 +479,21 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					}
 
 				    const hasViolation: boolean = (faces.length as number) === 0 || (faces.length as number) > 1
-					if (onUpdateSession && (hasViolation || now - lastSessionUpdateRef.current >= 5000)) {
-						const currentSnapshots = sessionData?.snapshots || []
-						let updatedSnapshots = currentSnapshots
-						if (hasViolation) {
-							const violationSnapshot = {
-								timestamp: now,
-								type: "violation_trigger" as const,
-								image: "base64_image_placeholder",
-					    context: (faces.length as number) === 0 ? "No face detected" : "Multiple faces detected",
+						if (onUpdateSession && (hasViolation || now - lastSessionUpdateRef.current >= 5000)) {
+							if (hasViolation) {
+								const img = captureCurrentFrame(0.85)
+								if (img) {
+									appendSnapshot({ timestamp: now, type: "violation_trigger", image: img, context: (faces.length as number) === 0 ? "No face detected" : "Multiple faces detected" })
+								}
 							}
-							updatedSnapshots = [...currentSnapshots, violationSnapshot]
-							if (updatedSnapshots.length > 30) updatedSnapshots = updatedSnapshots.slice(-30)
+							onUpdateSession({ postureAnalysis: posture, attireAnalysis: attire })
+							lastSessionUpdateRef.current = now
 						}
-						onUpdateSession({ snapshots: updatedSnapshots, postureAnalysis: posture, attireAnalysis: attire })
-						lastSessionUpdateRef.current = now
-					}
 				}
 			} else {
 				setPostureAnalysis(null)
 				setExpressionAnalysis(null)
 				setAttireAnalysis(null)
-				setEyeContactAnalysis(null)
 				if (isLookingOffScreen) {
 					if (gazeOffScreenStartTime !== null) {
 						const duration = now - gazeOffScreenStartTime
@@ -421,6 +539,34 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 			}
 		}
 		init()
+
+		// Schedule random snapshots:
+		//  - 1st after 1 minute
+		//  - 2nd after 5 minutes
+		//  - remaining (3) spread randomly later in the session
+		const totalShots = 5
+		const fixedDelays = [60 * 1000, 5 * 60 * 1000]
+		const remaining = Math.max(0, totalShots - fixedDelays.length)
+		const times: number[] = [...fixedDelays]
+		if (remaining > 0) {
+			// Distribute remaining between 7 and 10 minutes with slight jitter
+			const minMs = 7 * 60 * 1000
+			const maxMs = 10 * 60 * 1000
+			for (let i = 0; i < remaining; i++) {
+				const base = minMs + Math.random() * (maxMs - minMs)
+				const jitter = (Math.random() - 0.5) * 30 * 1000 // +/- 30s
+				times.push(Math.max(0, Math.floor(base + jitter)))
+			}
+		}
+		// Deduplicate close times and ensure sorted
+		times.sort((a, b) => a - b)
+		for (let i = 1; i < times.length; i++) {
+			if (Math.abs(times[i] - times[i - 1]) < 10 * 1000) times[i] += 12 * 1000 // push by 12s if too close
+		}
+		times.forEach((delay) => {
+			const id = window.setTimeout(() => takeRandomSnapshot(), delay)
+			randomSnapshotTimersRef.current.push(id)
+		})
 		return () => {
 			isCleaningUpRef.current = true
 			if (animationRef.current) cancelAnimationFrame(animationRef.current)
@@ -431,6 +577,9 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 			if (audioStreamRef.current) audioStreamRef.current.getTracks().forEach((t) => t.stop())
 			stopAudio()
 			audioStreamRef.current = null
+			// Clear scheduled random snapshots
+			randomSnapshotTimersRef.current.forEach((id) => window.clearTimeout(id))
+			randomSnapshotTimersRef.current = []
 		}
 	}, [])
 
@@ -522,7 +671,6 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 				<div>Faces: <strong style={{ color: faceCount === 1 ? "#16a34a" : "#ef4444" }}>{faceCount}</strong></div>
 				<div>No Face: <strong style={{ color: noFaceDetectionCount > 0 ? "#ef4444" : "#16a34a" }}>{noFaceDetectionCount}</strong></div>
 				<div>Multiple: <strong style={{ color: multipleFacesDetectionCount > 0 ? "#ef4444" : "#16a34a" }}>{multipleFacesDetectionCount}</strong></div>
-				<div>Eye Contact: <strong style={{ color: eyeContactAnalysis?.isLookingAtCamera ? "#16a34a" : "#ef4444" }}>{eyeContactAnalysis?.isLookingAtCamera ? "Yes" : "No"}</strong></div>
 				<div>Posture: <strong style={{ color: postureAnalysis?.isGoodPosture ? "#16a34a" : "#f59e0b" }}>{postureAnalysis?.isGoodPosture ? "Good" : "Poor"}</strong></div>
 				<div>Attire: <strong style={{ color: attireAnalysis?.isProfessional ? "#16a34a" : "#f59e0b" }}>{attireAnalysis?.isProfessional ? "Professional" : "Casual"}</strong></div>
 				<div>Emotion: <strong style={{ color: "#3b82f6" }}>{expressionAnalysis?.dominant || "Unknown"}</strong></div>
