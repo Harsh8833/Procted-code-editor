@@ -93,8 +93,19 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 		return { status, confidence, timestamp: Date.now() }
 	}
 
-		const estimateScreenCount = (): number => {
-			try {
+	function detectMultipleMonitors() {
+		if ("isExtended" in window.screen) {
+			return window.screen.isExtended;
+		}
+		return (
+			window.screen.availWidth > window.screen.width ||
+			window.screenLeft !== 0 ||
+			window.screenTop !== 0 ||
+			window.matchMedia("(display-mode: extended)").matches
+		);
+	}
+	const estimateScreenCount = (): number => {
+		try {
 				const screenWidth = window.screen.width
 				const screenHeight = window.screen.height
 				const availWidth = window.screen.availWidth
@@ -221,7 +232,7 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 		try {
 			const count = await checkMonitorCount()
 			// Enforce single monitor: fail if more than one is connected
-			if (count && count > 1) {
+			if (count && count > 1 || detectMultipleMonitors()) {
 				setPartialResults((r) => ({ ...r, monitorCount: count }))
 				throw new Error('Multiple displays detected. Please remove external screens and keep only one display connected, then press Retry.')
 			}

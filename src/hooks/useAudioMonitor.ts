@@ -23,9 +23,13 @@ export function useAudioMonitor(options?: { onEvent?: EventCb; context?: string 
   const rafRef = useRef<number | null>(null)
 
   const faceDetectedRef = useRef<boolean>(false)
-  const cooldownSpikeRef = useRef<number>(0)
-  const cooldownAudioNoFaceRef = useRef<number>(0)
-  const silenceStartRef = useRef<number | null>(null)
+  // Mouth/lip state from vision
+  const mouthMovingRef = useRef<boolean>(false)
+  const mouthOpenRef = useRef<boolean | null>(null)
+  const mouthActivityPctRef = useRef<number>(0) // 0..100
+  // Simple rule timers: both audio and lips active
+  const bothStartRef = useRef<number | null>(null)
+  const bothCooldownRef = useRef<number>(0)
 
   const stop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -44,44 +48,28 @@ export function useAudioMonitor(options?: { onEvent?: EventCb; context?: string 
   const analyze = useCallback(
     (currentLevelPct: number) => {
       const now = Date.now()
-      const faceDetected = faceDetectedRef.current
+      // Simple rule: anomaly when both audio and lips exceed thresholds for a short dwell
+      const AUDIO_THRESH = 10 // %
+      const LIPS_THRESH = 30 // % activity or explicit moving/open
+      const lipsActive = mouthMovingRef.current || (!!mouthOpenRef.current && mouthActivityPctRef.current > LIPS_THRESH) || mouthActivityPctRef.current > LIPS_THRESH
+      const audioActive = currentLevelPct >= AUDIO_THRESH
 
-      if (currentLevelPct > 18 && now - cooldownSpikeRef.current > 2000) {
-        setAnomalyCount((c) => c + 1)
-        cooldownSpikeRef.current = now
-        onEvent?.({
-          eventType: "audio_anomaly",
-          severity: "warning",
-          context,
-          data: { level: currentLevelPct, reason: "audio_spike", faceDetected },
-        })
-      }
-
-      if (faceDetected && currentLevelPct < 3) {
-        if (silenceStartRef.current == null) silenceStartRef.current = now
-        else if (now - silenceStartRef.current > 15000) {
+      if (lipsActive && audioActive) {
+        if (bothStartRef.current == null) bothStartRef.current = now
+        const dwell = now - (bothStartRef.current ?? now)
+        if (dwell > 100 && now - bothCooldownRef.current > 2000) {
           setAnomalyCount((c) => c + 1)
-          silenceStartRef.current = null
+          bothCooldownRef.current = now
+          bothStartRef.current = null
           onEvent?.({
             eventType: "audio_anomaly",
             severity: "warning",
             context,
-            data: { level: currentLevelPct, reason: "extended_silence_with_face" },
+            data: { level: currentLevelPct, lipsActivityPct: mouthActivityPctRef.current, reason: "audio_with_lips" },
           })
         }
-      } else if (currentLevelPct >= 3) {
-        silenceStartRef.current = null
-      }
-
-      if (!faceDetected && currentLevelPct > 12 && now - cooldownAudioNoFaceRef.current > 3000) {
-        setAnomalyCount((c) => c + 1)
-        cooldownAudioNoFaceRef.current = now
-        onEvent?.({
-          eventType: "audio_anomaly",
-          severity: "warning",
-          context,
-          data: { level: currentLevelPct, reason: "audio_without_face" },
-        })
+      } else {
+        bothStartRef.current = null
       }
     },
     [context, onEvent]
@@ -104,9 +92,8 @@ export function useAudioMonitor(options?: { onEvent?: EventCb; context?: string 
       try {
         setError(undefined)
         setAnomalyCount(0)
-        cooldownSpikeRef.current = 0
-        cooldownAudioNoFaceRef.current = 0
-        silenceStartRef.current = null
+  bothStartRef.current = null
+  bothCooldownRef.current = 0
 
         let s = stream
         if (!s && typeof window !== "undefined" && (window as any).precheckAudioStream) {
@@ -137,7 +124,15 @@ export function useAudioMonitor(options?: { onEvent?: EventCb; context?: string 
     faceDetectedRef.current = present
   }, [])
 
+  const setMouthState = useCallback((state: { moving?: boolean; open?: boolean | null; activityPct?: number }) => {
+    if (typeof state.moving === 'boolean') mouthMovingRef.current = state.moving
+    if (typeof state.open !== 'undefined') mouthOpenRef.current = state.open
+    if (typeof state.activityPct === 'number' && !Number.isNaN(state.activityPct)) {
+      mouthActivityPctRef.current = Math.max(0, Math.min(100, Math.round(state.activityPct)))
+    }
+  }, [])
+
   useEffect(() => stop, [stop])
 
-  return { status, error, level, anomalyCount, start, stop, setFaceDetected }
+  return { status, error, level, anomalyCount, start, stop, setFaceDetected, setMouthState }
 }

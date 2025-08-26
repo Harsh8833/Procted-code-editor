@@ -58,6 +58,9 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	const [gazeOffScreenCount, setGazeOffScreenCount] = useState(0)
 	const [isLookingOffScreen, setIsLookingOffScreen] = useState(false)
 	const [gazeOnScreen, setGazeOnScreen] = useState<boolean | null>(null)
+	const [mouthOpen, setMouthOpen] = useState<boolean | null>(null)
+	const [mouthMoving, setMouthMoving] = useState(false)
+	const [mouthActivity, setMouthActivity] = useState(0)
 
 	const [multipleFacesStartTime, setMultipleFacesStartTime] = useState<number | null>(null)
 	const [gazeOffScreenStartTime, setGazeOffScreenStartTime] = useState<number | null>(null)
@@ -76,6 +79,9 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	const animationRef = useRef<number | null>(null)
 	const audioStreamRef = useRef<MediaStream | null>(null)
 	const mpGazeRef = useRef<Awaited<ReturnType<typeof createMediapipeGazeDetector>> | null>(null)
+	// Throttle MediaPipe estimates to ~15Hz
+	const mpLastUpdateTsRef = useRef<number>(0)
+	const mpLastResultRef = useRef<Awaited<ReturnType<NonNullable<typeof mpGazeRef.current>['estimate']>> | null>(null)
 	const isCleaningUpRef = useRef<boolean>(false)
 	const lastSessionUpdateRef = useRef<number>(0)
 	const gazeCooldownRef = useRef<number>(0)
@@ -108,7 +114,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	const POSTURE_SWITCH_STREAK = 8 // frames required to switch Good<->Poor
 	const POSTURE_EMA_ALPHA = 0.25 // smoothing factor for pose angles
 
-	const { level: audioLevelPct, anomalyCount, start: startAudio, stop: stopAudio, setFaceDetected } = useAudioMonitor({
+	const { level: audioLevelPct, anomalyCount, start: startAudio, stop: stopAudio, setFaceDetected, setMouthState } = useAudioMonitor({
 		context: "coding",
 		onEvent: (evt) => onAddEvent?.({ ...evt, timestamp: Date.now() }),
 	})
@@ -232,7 +238,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 		// Resize backing canvas to match source, draw, and export
 		canvas.width = vw
 		canvas.height = vh
-		const ctx = canvas.getContext("2d")
+	const ctx = canvas.getContext("2d", { willReadFrequently: true } as any) as CanvasRenderingContext2D | null
 		if (!ctx) return null
 		ctx.drawImage(video, 0, 0, vw, vh)
 		try {
@@ -434,7 +440,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 
 			if (faces.length === 1) {
 				const face = faces[0]
-				const ctx = canvas.getContext("2d")
+				const ctx = canvas.getContext("2d", { willReadFrequently: true } as any) as CanvasRenderingContext2D | null
 				if (ctx) {
 					ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 					const fullFrame = ctx.getImageData(0, 0, canvas.width, canvas.height)
@@ -505,8 +511,23 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					let onScreenGaze: boolean | null = null
 					if (mpGazeRef.current && video) {
 						try {
-							const g = await mpGazeRef.current.estimate(video, (performance as any)?.now?.() || undefined)
+							const nowPerf = (performance as any)?.now?.() || Date.now()
+							let g = mpLastResultRef.current
+							// Run MediaPipe at most ~15Hz (every ~66-70ms)
+							if (nowPerf - mpLastUpdateTsRef.current >= 70) {
+								g = await mpGazeRef.current.estimate(video, nowPerf)
+								mpLastUpdateTsRef.current = nowPerf
+								mpLastResultRef.current = g
+							}
 							onScreenGaze = g?.onScreen ?? null
+							if (g?.mouth) {
+								setMouthOpen(g.mouth.open)
+								setMouthMoving(g.mouth.moving)
+								const pct = Math.round(Math.min(1, Math.max(0, g.mouth.activity)) * 100)
+								setMouthActivity(pct)
+								// Feed mouth state to audio monitor for fused anomalies
+								try { setMouthState({ open: g.mouth.open, moving: g.mouth.moving, activityPct: pct }) } catch {}
+							}
 							if (onScreenGaze !== null) setGazeOnScreen(onScreenGaze)
 							if (onScreenGaze === false && !isLookingOffScreen && Date.now() - gazeCooldownRef.current > 3000) {
 								setGazeOffScreenCount((p) => p + 1)
@@ -622,10 +643,22 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 		const init = async () => {
 			try {
 				const stream = await navigator.mediaDevices.getUserMedia({
-					video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } },
+					video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } },
 					audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
 				})
-				if (videoRef.current) videoRef.current.srcObject = stream
+				if (videoRef.current) {
+					videoRef.current.srcObject = stream
+					videoRef.current.onloadedmetadata = async () => {
+						try { await (videoRef.current as any).play?.() } catch {}
+						try {
+							const vv = videoRef.current as any
+							if (vv?.videoWidth && vv?.videoHeight) {
+								vv.width = vv.videoWidth
+								vv.height = vv.videoHeight
+							}
+						} catch {}
+					}
+				}
 				let audioStream: MediaStream | null = null
 				const audioTracks = stream.getAudioTracks()
 				if (audioTracks.length > 0) {
@@ -780,6 +813,12 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 				<div>Attire: <strong style={{ color: attireAnalysis?.isProfessional ? "#16a34a" : "#f59e0b" }}>{attireAnalysis?.isProfessional ? "Professional" : "Casual"}</strong></div>
 				<div>Emotion: <strong style={{ color: "#3b82f6" }}>{expressionAnalysis?.dominant || "Unknown"}</strong></div>
 				<div>Gaze: <strong style={{ color: gazeOnScreen === null ? "#9ca3af" : gazeOnScreen ? "#16a34a" : "#ef4444" }}>{gazeOnScreen === null ? "--" : gazeOnScreen ? "On" : "Off"}</strong></div>
+				<div>Mouth: <strong style={{ color: mouthOpen === null ? "#9ca3af" : mouthOpen ? "#16a34a" : "#111827" }}>{mouthOpen === null ? "--" : mouthOpen ? (mouthMoving ? "Open+Moving" : "Open") : (mouthMoving ? "Closed+Moving" : "Closed")}</strong></div>
+				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>Lip Act: <span style={{ color: mouthActivity > 30 ? "#16a34a" : mouthActivity > 10 ? "#f59e0b" : "#9ca3af" }}>{mouthActivity}%</span>
+						<div style={{ width: 64, height: 6, background: "#eee", borderRadius: 9999, overflow: "hidden" }}>
+							<div style={{ width: `${Math.min(mouthActivity, 100)}%`, height: 6, transition: "width 100ms", background: mouthActivity > 30 ? "#16a34a" : mouthActivity > 10 ? "#f59e0b" : "#9ca3af" }} />
+						</div>
+					</div>
 				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>Audio: <span style={{ color: audioLevel > 50 ? "#16a34a" : audioLevel > 20 ? "#f59e0b" : "#ef4444" }}>{audioLevel}%</span>
 					<div style={{ width: 64, height: 6, background: "#eee", borderRadius: 9999, overflow: "hidden" }}>
 						<div style={{ width: `${Math.min(audioLevel, 100)}%`, height: 6, transition: "width 100ms", background: audioLevel > 50 ? "#16a34a" : audioLevel > 20 ? "#f59e0b" : "#ef4444" }} />

@@ -27,6 +27,12 @@ export type MPGazeResult = {
   confidence: number
   head: { yaw?: number; pitch?: number }
   debug?: Record<string, number>
+  mouth?: {
+    open: boolean
+    openScore: number
+    moving: boolean
+    activity: number
+  }
 }
 
 export type MPGazeDetector = {
@@ -61,18 +67,21 @@ export async function createMediapipeGazeDetector(opts: MPInitOptions = {}): Pro
     baseOptions: { modelAssetPath },
     runningMode,
     numFaces: 1,
+  minFaceDetectionConfidence: 0.2,
+  minFacePresenceConfidence: 0.2,
+  minTrackingConfidence: 0.2,
     outputFaceBlendshapes: true,
     outputFacialTransformationMatrixes: true,
   })
 
   // Thresholds with defaults; allow overrides via opts
   const t: MPThresholds = {
-    horiz: opts.thresholds?.horiz ?? 0.6,
-    vert: opts.thresholds?.vert ?? 0.75,
-    yaw: opts.thresholds?.yaw ?? 28,
-    pitch: opts.thresholds?.pitch ?? 26,
-    offDwell: opts.thresholds?.offDwell ?? 8,
-    onDwell: opts.thresholds?.onDwell ?? 5,
+     horiz: opts.thresholds?.horiz ?? 0.40,
+  vert: opts.thresholds?.vert ?? 0.55,
+  yaw: opts.thresholds?.yaw ?? 19,
+  pitch: opts.thresholds?.pitch ?? 24,
+  offDwell: opts.thresholds?.offDwell ?? 4,
+    onDwell: opts.thresholds?.onDwell ?? 3,
     calibFrames: opts.thresholds?.calibFrames ?? 45,
   }
 
@@ -82,6 +91,17 @@ export async function createMediapipeGazeDetector(opts: MPInitOptions = {}): Pro
   let lastTs = 0
   let offFrames = 0
   let onFrames = 0
+  // Mouth activity smoothing and dwell state
+  let prevMouthVec: number[] | null = null
+  let emaMouthActivity = 0
+  let mouthOpenDwellOn = 0
+  let mouthOpenDwellOff = 0
+  let mouthMoveDwellOn = 0
+  let mouthMoveDwellOff = 0
+  const MOUTH_ON_FRAMES = 3
+  const MOUTH_OFF_FRAMES = 2
+  const MOVE_ON_FRAMES = 3
+  const MOVE_OFF_FRAMES = 2
   // Brief auto-calibration to learn user's neutral gaze center
   let calibrating = true
   let calibFrames = 0
@@ -94,13 +114,22 @@ export async function createMediapipeGazeDetector(opts: MPInitOptions = {}): Pro
   async function estimate(videoEl: HTMLVideoElement, timestampMs?: number): Promise<MPGazeResult | null> {
     if (!videoEl || !(landmarker as any)) return null
     const ts = timestampMs ?? performance.now()
+    const vw = (videoEl as any).videoWidth || (videoEl as any).width || 0
+    const vh = (videoEl as any).videoHeight || (videoEl as any).height || 0
+    const rs = (videoEl as any).readyState ?? 0
+    if (!vw || !vh || rs < 2) {
+      return null
+    }
     // Detect
     const res = landmarker.detectForVideo(videoEl, ts)
-    if (!res || !res.faceLandmarks || res.faceLandmarks.length === 0) return null
+    if (!res || !res.faceLandmarks || res.faceLandmarks.length === 0) {
+      return null
+    }
 
     const blends = res.faceBlendshapes?.[0]?.categories || []
     // Pull needed categories (default 0 if missing)
     const m = (name: string) => (blends.find((c: any) => c.categoryName === name)?.score || 0) as number
+    
 
     const lIn = m('eyeLookInLeft')
     const lOut = m('eyeLookOutLeft')
@@ -125,6 +154,50 @@ export async function createMediapipeGazeDetector(opts: MPInitOptions = {}): Pro
     gy = Math.max(-1, Math.min(1, gy))
     emaGaze.x = alpha * gx + (1 - alpha) * emaGaze.x
     emaGaze.y = alpha * gy + (1 - alpha) * emaGaze.y
+
+    // --- Mouth open / movement detection from blendshapes ---
+    const jawOpen = m('jawOpen')
+    const mouthOpenBS = m('mouthOpen')
+    const mouthFunnel = m('mouthFunnel')
+    const mouthPucker = m('mouthPucker')
+    const mouthSmileL = m('mouthSmileLeft')
+    const mouthSmileR = m('mouthSmileRight')
+    const mouthPressL = m('mouthPressLeft')
+    const mouthPressR = m('mouthPressRight')
+    const mouthStretchL = m('mouthStretchLeft')
+    const mouthStretchR = m('mouthStretchRight')
+    const mouthLowerDownL = m('mouthLowerDownLeft')
+    const mouthLowerDownR = m('mouthLowerDownRight')
+    const mouthUpperUpL = m('mouthUpperUpLeft')
+    const mouthUpperUpR = m('mouthUpperUpRight')
+    
+
+    const mouthVec = [
+      jawOpen, mouthOpenBS, mouthFunnel, mouthPucker,
+      mouthSmileL, mouthSmileR, mouthPressL, mouthPressR,
+      mouthStretchL, mouthStretchR, mouthLowerDownL, mouthLowerDownR,
+      mouthUpperUpL, mouthUpperUpR,
+    ]
+    let activity = 0
+    if (prevMouthVec != null) {
+      for (let i = 0; i < mouthVec.length; i++) activity += Math.abs(mouthVec[i] - prevMouthVec[i]!)
+    }
+    prevMouthVec = mouthVec
+    // Smooth activity to reduce flicker
+    emaMouthActivity = 0.3 * activity + 0.7 * emaMouthActivity
+    // Open score combines explicit and proxy signals
+    let openScore = Math.max(mouthOpenBS, jawOpen)
+    const lipSeparation = Math.max(0, (mouthLowerDownL + mouthLowerDownR + mouthUpperUpL + mouthUpperUpR) / 4)
+    openScore = Math.max(openScore, lipSeparation)
+    openScore = Math.max(0, Math.min(1, openScore))
+    // Dwell-based stable states
+    const mouthOpenNow = openScore > 0.35
+    const mouthMovingNow = emaMouthActivity > 0.06
+    if (mouthOpenNow) { mouthOpenDwellOn++; mouthOpenDwellOff = Math.max(0, mouthOpenDwellOff - 1) } else { mouthOpenDwellOff++; mouthOpenDwellOn = Math.max(0, mouthOpenDwellOn - 1) }
+    if (mouthMovingNow) { mouthMoveDwellOn++; mouthMoveDwellOff = Math.max(0, mouthMoveDwellOff - 1) } else { mouthMoveDwellOff++; mouthMoveDwellOn = Math.max(0, mouthMoveDwellOn - 1) }
+    const mouthOpenStable = mouthOpenDwellOn >= MOUTH_ON_FRAMES ? true : mouthOpenDwellOff >= MOUTH_OFF_FRAMES ? false : undefined
+    const mouthMovingStable = mouthMoveDwellOn >= MOVE_ON_FRAMES ? true : mouthMoveDwellOff >= MOVE_OFF_FRAMES ? false : undefined
+    
 
     // Auto-calibrate when user likely looking at screen (near-center)
     if (calibrating) {
@@ -163,7 +236,7 @@ export async function createMediapipeGazeDetector(opts: MPInitOptions = {}): Pro
   // After calibration, these thresholds are conservative but reachable when looking clearly away
   const strongHorizontal = absX > t.horiz
   const strongVertical = absY > t.vert
-  const headTurn = (yaw !== undefined && Math.abs(yaw) > t.yaw) || (pitch !== undefined && Math.abs(pitch) > t.pitch)
+  const headTurn = (yaw !== undefined && Math.abs(yaw as number) > t.yaw) || (pitch !== undefined && Math.abs(pitch as number) > t.pitch)
 
     const definitelyOff = strongHorizontal || strongVertical || headTurn
     let onScreen = true
@@ -190,6 +263,13 @@ export async function createMediapipeGazeDetector(opts: MPInitOptions = {}): Pro
         offFrames, onFrames,
         baseX: baseline.x, baseY: baseline.y,
         absX, absY,
+        jawOpen, mouthOpenBS, activity: emaMouthActivity, openScore,
+      },
+      mouth: {
+        open: (mouthOpenStable ?? (openScore > 0.5)) as boolean,
+        openScore,
+        moving: (mouthMovingStable ?? (emaMouthActivity > 0.08)) as boolean,
+        activity: emaMouthActivity,
       },
     }
   }
@@ -198,5 +278,5 @@ export async function createMediapipeGazeDetector(opts: MPInitOptions = {}): Pro
     try { (landmarker as any)?.close?.() } catch {}
   }
 
-  return { ready: true, estimate, close }
+  return { ready: true, estimate, close } as MPGazeDetector
 }
