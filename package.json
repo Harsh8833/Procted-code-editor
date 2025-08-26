@@ -17,7 +17,8 @@
 	},
 	"dependencies": {
 		"@tensorflow-models/blazeface": "^0.1.0",
-		"@tensorflow/tfjs": "^4.16.0"
+		"@tensorflow/tfjs": "^4.16.0",
+		"@mediapipe/tasks-vision": "^0.10.15"
 	},
 	"devDependencies": {
 		"react": "^18.3.1",

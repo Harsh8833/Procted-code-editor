@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import type { MonitoringStatus, SessionData } from "../types/proctoring"
 import { useAudioMonitor } from "../hooks/useAudioMonitor"
 import { createEmotionAnalyzer } from "../lib/vision/emotion"
+import { createMediapipeGazeDetector } from "../lib/vision/mediapipe/gaze"
 
 type FaceDetection = { x: number; y: number; width: number; height: number; confidence: number; landmarks?: [number, number][] }
 type PostureAnalysis = { isGoodPosture: boolean; shoulderAlignment: number; headTilt: number; confidence: number }
@@ -28,9 +29,14 @@ export type FloatingVideoProps = {
 	onUpdateSession?: (updates: Partial<SessionData>) => void
 	onAddEvent?: (event: any) => void
 	onAddSnapshot?: (snapshot: SessionData["snapshots"][number]) => void
+	// Optional: tune gaze thresholds quickly without code changes
+	gazeThresholds?: {
+		mediapipe?: Partial<import("../lib/vision/mediapipe/gaze").MPThresholds>
+		fallback?: { yaw?: number; pitch?: number; centerOffset?: number; offFrames?: number; onFrames?: number }
+	}
 }
 
-export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, onUpdateSession, onAddEvent, onAddSnapshot }: FloatingVideoProps) {
+export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, onUpdateSession, onAddEvent, onAddSnapshot, gazeThresholds }: FloatingVideoProps) {
 	const [position, setPosition] = useState({ x: typeof window !== 'undefined' ? window.innerWidth - 280 : 0, y: typeof window !== 'undefined' ? window.innerHeight - 400 : 0 })
 	const [isDragging, setIsDragging] = useState(false)
 	const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
@@ -51,6 +57,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	const [copyAttempts, setCopyAttempts] = useState(0)
 	const [gazeOffScreenCount, setGazeOffScreenCount] = useState(0)
 	const [isLookingOffScreen, setIsLookingOffScreen] = useState(false)
+	const [gazeOnScreen, setGazeOnScreen] = useState<boolean | null>(null)
 
 	const [multipleFacesStartTime, setMultipleFacesStartTime] = useState<number | null>(null)
 	const [gazeOffScreenStartTime, setGazeOffScreenStartTime] = useState<number | null>(null)
@@ -68,12 +75,24 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	const faceDetectorRef = useRef<any>(null)
 	const animationRef = useRef<number | null>(null)
 	const audioStreamRef = useRef<MediaStream | null>(null)
+	const mpGazeRef = useRef<Awaited<ReturnType<typeof createMediapipeGazeDetector>> | null>(null)
 	const isCleaningUpRef = useRef<boolean>(false)
 	const lastSessionUpdateRef = useRef<number>(0)
 	const gazeCooldownRef = useRef<number>(0)
 	const lastFaceStateRef = useRef<"none" | "single" | "multiple">("none")
 	const consecutiveFramesRef = useRef({ noFace: 0, multipleFaces: 0 })
 	const incidentRef = useRef({ noFace: false, multipleFaces: false, gazeOff: false })
+	const detectingRef = useRef(false)
+
+	// Fallback gaze detection (if MediaPipe not available or returns null)
+	const fallbackGazeRef = useRef({ offFrames: 0, onFrames: 0 })
+	const FALLBACK_OFF_FRAMES = gazeThresholds?.fallback?.offFrames ?? 8
+	const FALLBACK_ON_FRAMES = gazeThresholds?.fallback?.onFrames ?? 5
+	const FALLBACK_THRESHOLDS = { 
+		yaw: gazeThresholds?.fallback?.yaw ?? 32, 
+		pitch: gazeThresholds?.fallback?.pitch ?? 26, 
+		centerOffset: gazeThresholds?.fallback?.centerOffset ?? 0.35 
+	}
 
 	// Emotion analyzer instance (with internal EMA)
 	const emotionAnalyzerRef = useRef<ReturnType<typeof createEmotionAnalyzer> | null>(null)
@@ -154,17 +173,6 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 		const isProfessional = (darkRatio > 0.35 && varietyRatio < 0.22) || (satAvg < 0.28 && varietyRatio < 0.18) || (collarHint > 0.002)
 		const confidence = Math.max(0.5, Math.min(0.95, 0.55 + (hasShirt ? 0.15 : 0) + (isProfessional ? 0.15 : 0) - varietyRatio * 0.2))
 		return { isProfessional, hasShirt, confidence, details: isProfessional ? "Professional attire (solid/low-saturation)" : hasShirt ? "Casual attire" : "Torso not clearly visible" }
-	}, [])
-
-	const analyzeEyeContact = useCallback((face: FaceDetection, w: number, h: number): EyeContactAnalysis => {
-		const faceCenterX = face.x + face.width / 2
-		const faceCenterY = face.y + face.height / 2
-		const gazeX = (faceCenterX - w / 2) / w
-		const gazeY = (faceCenterY - h / 2) / h
-		const distance = Math.sqrt(gazeX * gazeX + gazeY * gazeY)
-		const isLookingAtCamera = distance < 0.15
-		const attentionScore = Math.max(0, 1 - distance * 2)
-		return { isLookingAtCamera, gazeDirection: { x: gazeX, y: gazeY }, confidence: 0.8, attentionScore }
 	}, [])
 
 	const analyzeHeadPose = useCallback((face: FaceDetection): HeadPoseAnalysis | null => {
@@ -271,16 +279,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 		randomSnapshotTimersRef.current.push(id)
 	}, [appendSnapshot, captureCurrentFrame])
 
-	const analyzeGazeTracking = useCallback((eyeContact: EyeContactAnalysis, headPose: HeadPoseAnalysis | null) => {
-		const { gazeDirection, attentionScore, isLookingAtCamera } = eyeContact
-		const gazeDistance = Math.sqrt(gazeDirection.x * gazeDirection.x + gazeDirection.y * gazeDirection.y)
-		const baseOff = !isLookingAtCamera && gazeDistance > 0.5 && attentionScore < 0.3
-		if (headPose) {
-			// Consider head orientation even if face center remains
-			if (headPose.isHeadTurned && headPose.confidence >= 0.6) return true
-		}
-		return baseOff
-	}, [])
+	// MP gaze handled by MediaPipe FaceLandmarker in detect loop
 
 	const initializeFaceDetection = useCallback(async () => {
 		try {
@@ -310,14 +309,21 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 	}
 
 	const detectFaces = useCallback(async () => {
+		if (detectingRef.current) {
+			animationRef.current = requestAnimationFrame(detectFaces)
+			return
+		}
+		detectingRef.current = true
 		if (!videoRef.current || !canvasRef.current || !faceDetectorRef.current) {
 			animationRef.current = requestAnimationFrame(detectFaces)
+			detectingRef.current = false
 			return
 		}
 		const video = videoRef.current
 		const canvas = canvasRef.current
 		if (video.readyState !== 4) {
 			animationRef.current = requestAnimationFrame(detectFaces)
+			detectingRef.current = false
 			return
 		}
 		try {
@@ -490,30 +496,84 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 						expression = { dominant: res.dominant, confidence: res.confidence, emotions: res.emotions as Record<string, number> }
 					}
 					const attire = analyzeAttire(face, fullFrame)
-					const eyeContact = analyzeEyeContact(face, canvas.width, canvas.height) // used only for gaze-off decision
-					// headPose already computed above for posture; compute if absent for gaze
+					// headPose already computed above for posture; compute if absent
 					const headPoseForGaze = headPose ?? analyzeHeadPose(face)
 					setPostureAnalysis(posture)
 					setExpressionAnalysis(expression)
 					setAttireAnalysis(attire)
-					const off = analyzeGazeTracking(eyeContact, headPoseForGaze)
-					if (off && !isLookingOffScreen && Date.now() - gazeCooldownRef.current > 3000) {
-						setGazeOffScreenCount((p) => p + 1)
-						setIsLookingOffScreen(true)
-						setGazeOffScreenStartTime(now)
-						gazeCooldownRef.current = Date.now()
-						if (!incidentRef.current.gazeOff) {
-							incidentRef.current.gazeOff = true
-							onAddEvent?.({ eventType: "gaze_tracking", severity: "warning", context: "coding", data: { offscreen: true, reason: headPoseForGaze?.isHeadTurned ? "head_movement" : "center_offset", headPose: headPoseForGaze }, timestamp: now })
+					// Determine on-screen using MediaPipe if present, else fallback using head pose + face center
+					let onScreenGaze: boolean | null = null
+					if (mpGazeRef.current && video) {
+						try {
+							const g = await mpGazeRef.current.estimate(video, (performance as any)?.now?.() || undefined)
+							onScreenGaze = g?.onScreen ?? null
+							if (onScreenGaze !== null) setGazeOnScreen(onScreenGaze)
+							if (onScreenGaze === false && !isLookingOffScreen && Date.now() - gazeCooldownRef.current > 3000) {
+								setGazeOffScreenCount((p) => p + 1)
+								setIsLookingOffScreen(true)
+								setGazeOffScreenStartTime(now)
+								gazeCooldownRef.current = Date.now()
+								setGazeOnScreen(false)
+								if (!incidentRef.current.gazeOff) {
+									incidentRef.current.gazeOff = true
+									onAddEvent?.({ eventType: "gaze_tracking", severity: "warning", context: "coding", data: { offscreen: true, headPose: headPoseForGaze, gaze: g }, timestamp: now })
+								}
+							} else if (onScreenGaze === true && isLookingOffScreen) {
+								if (gazeOffScreenStartTime !== null) {
+									const duration = now - gazeOffScreenStartTime
+									setGazeOffScreenDuration((p) => p + duration)
+									setGazeOffScreenStartTime(null)
+								}
+								setIsLookingOffScreen(false)
+								incidentRef.current.gazeOff = false
+								setGazeOnScreen(true)
+							}
+						} catch {
+							onScreenGaze = null
 						}
-					} else if (!off && isLookingOffScreen) {
-						if (gazeOffScreenStartTime !== null) {
-							const duration = now - gazeOffScreenStartTime
-							setGazeOffScreenDuration((p) => p + duration)
-							setGazeOffScreenStartTime(null)
+					}
+
+					if (onScreenGaze === null) {
+						// Fallback: use head pose + face center offset
+						const videoW = canvas.width, videoH = canvas.height
+						const faceCenterX = face.x + face.width / 2
+						const faceCenterY = face.y + face.height / 2
+						const offCenter = Math.hypot((faceCenterX - videoW / 2) / videoW, (faceCenterY - videoH / 2) / videoH)
+						const yaw = headPoseForGaze?.yaw ?? 0
+						const pitch = headPoseForGaze?.pitch ?? 0
+						const strongHead = Math.abs(yaw) > FALLBACK_THRESHOLDS.yaw || Math.abs(pitch) > FALLBACK_THRESHOLDS.pitch
+						const strongCenter = offCenter > FALLBACK_THRESHOLDS.centerOffset
+						const definitelyOff = strongHead || strongCenter
+						if (definitelyOff) {
+							fallbackGazeRef.current.offFrames += 1
+							fallbackGazeRef.current.onFrames = Math.max(0, fallbackGazeRef.current.onFrames - 1)
+						} else {
+							fallbackGazeRef.current.onFrames += 1
+							fallbackGazeRef.current.offFrames = Math.max(0, fallbackGazeRef.current.offFrames - 1)
 						}
-						setIsLookingOffScreen(false)
-						incidentRef.current.gazeOff = false
+						const offNow = fallbackGazeRef.current.offFrames >= FALLBACK_OFF_FRAMES
+						const onNow = fallbackGazeRef.current.onFrames >= FALLBACK_ON_FRAMES
+						setGazeOnScreen((prev) => (onNow ? true : offNow ? false : prev))
+						if (offNow && !isLookingOffScreen && Date.now() - gazeCooldownRef.current > 3000) {
+							setGazeOffScreenCount((p) => p + 1)
+							setIsLookingOffScreen(true)
+							setGazeOffScreenStartTime(now)
+							gazeCooldownRef.current = Date.now()
+							setGazeOnScreen(false)
+							if (!incidentRef.current.gazeOff) {
+								incidentRef.current.gazeOff = true
+								onAddEvent?.({ eventType: "gaze_tracking", severity: "warning", context: "coding", data: { offscreen: true, reason: strongHead ? "head_pose" : "center_offset", headPose: headPoseForGaze }, timestamp: now })
+							}
+						} else if (onNow && isLookingOffScreen) {
+							if (gazeOffScreenStartTime !== null) {
+								const duration = now - gazeOffScreenStartTime
+								setGazeOffScreenDuration((p) => p + duration)
+								setGazeOffScreenStartTime(null)
+							}
+							setIsLookingOffScreen(false)
+							incidentRef.current.gazeOff = false
+							setGazeOnScreen(true)
+						}
 					}
 
 				    const hasViolation: boolean = (faces.length as number) === 0 || (faces.length as number) > 1
@@ -540,6 +600,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					}
 					setIsLookingOffScreen(false)
 				}
+				setGazeOnScreen(null)
 			}
 
 			if (faces.length === 0) onStatusChange?.("violation")
@@ -547,9 +608,11 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 			else onStatusChange?.("optimal")
 		} catch (e) {
 			console.error("[widget] Face detection error:", e)
+		} finally {
+			animationRef.current = requestAnimationFrame(detectFaces)
+			detectingRef.current = false
 		}
-		animationRef.current = requestAnimationFrame(detectFaces)
-	}, [analyzeAttire, analyzeEyeContact, analyzeGazeTracking, onStatusChange, onUpdateSession, sessionData?.snapshots, isLookingOffScreen, multipleFacesStartTime, gazeOffScreenStartTime, setFaceDetected])
+	}, [analyzeAttire, onStatusChange, onUpdateSession, sessionData?.snapshots, isLookingOffScreen, multipleFacesStartTime, gazeOffScreenStartTime, setFaceDetected])
 
 	useEffect(() => {
 		setAudioAnomalyCount(0)
@@ -570,6 +633,8 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 					audioStreamRef.current = audioStream
 				}
 				await initializeFaceDetection()
+				// Initialize MediaPipe gaze detector
+					try { mpGazeRef.current = await createMediapipeGazeDetector({ thresholds: gazeThresholds?.mediapipe }) } catch {}
 				if (audioStream) await startAudio(audioStream)
 				animationRef.current = requestAnimationFrame(detectFaces)
 			} catch (e) {
@@ -615,6 +680,8 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 			if (audioStreamRef.current) audioStreamRef.current.getTracks().forEach((t) => t.stop())
 			stopAudio()
 			audioStreamRef.current = null
+			// Close mediapipe landmarker
+			mpGazeRef.current?.close?.()
 			// Clear scheduled random snapshots
 			randomSnapshotTimersRef.current.forEach((id) => window.clearTimeout(id))
 			randomSnapshotTimersRef.current = []
@@ -712,6 +779,7 @@ export function FloatingVideo({ monitoringStatus, sessionData, onStatusChange, o
 				<div>Posture: <strong style={{ color: postureAnalysis?.isGoodPosture ? "#16a34a" : "#f59e0b" }}>{postureAnalysis?.isGoodPosture ? "Good" : "Poor"}</strong></div>
 				<div>Attire: <strong style={{ color: attireAnalysis?.isProfessional ? "#16a34a" : "#f59e0b" }}>{attireAnalysis?.isProfessional ? "Professional" : "Casual"}</strong></div>
 				<div>Emotion: <strong style={{ color: "#3b82f6" }}>{expressionAnalysis?.dominant || "Unknown"}</strong></div>
+				<div>Gaze: <strong style={{ color: gazeOnScreen === null ? "#9ca3af" : gazeOnScreen ? "#16a34a" : "#ef4444" }}>{gazeOnScreen === null ? "--" : gazeOnScreen ? "On" : "Off"}</strong></div>
 				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>Audio: <span style={{ color: audioLevel > 50 ? "#16a34a" : audioLevel > 20 ? "#f59e0b" : "#ef4444" }}>{audioLevel}%</span>
 					<div style={{ width: 64, height: 6, background: "#eee", borderRadius: 9999, overflow: "hidden" }}>
 						<div style={{ width: `${Math.min(audioLevel, 100)}%`, height: 6, transition: "width 100ms", background: audioLevel > 50 ? "#16a34a" : audioLevel > 20 ? "#f59e0b" : "#ef4444" }} />

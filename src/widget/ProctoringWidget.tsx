@@ -45,6 +45,10 @@ export function ProctoringWidget({ onSessionStart, onSessionUpdate, onEvent }: P
 					store.addEvents([{ ...e, timestamp: e.timestamp ?? Date.now() }])
 					onEvent?.(e)
 				}}
+					gazeThresholds={{
+						mediapipe: { horiz: 0.35, vert: 0.5, yaw: 20, pitch: 18, offDwell: 5, onDwell: 3, calibFrames: 24 },
+						fallback: { yaw: 24, pitch: 20, centerOffset: 0.22, offFrames: 5, onFrames: 3 },
+					}}
 			/>
 		)
 }
