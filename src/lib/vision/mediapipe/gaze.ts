@@ -76,11 +76,11 @@ export async function createMediapipeGazeDetector(opts: MPInitOptions = {}): Pro
 
   // Thresholds with defaults; allow overrides via opts
   const t: MPThresholds = {
-     horiz: opts.thresholds?.horiz ?? 0.40,
-  vert: opts.thresholds?.vert ?? 0.55,
-  yaw: opts.thresholds?.yaw ?? 19,
-  pitch: opts.thresholds?.pitch ?? 24,
-  offDwell: opts.thresholds?.offDwell ?? 4,
+    horiz: opts.thresholds?.horiz ?? 0.40,
+    vert: opts.thresholds?.vert ?? 0.55,
+    yaw: opts.thresholds?.yaw ?? 19,
+    pitch: opts.thresholds?.pitch ?? 24,
+    offDwell: opts.thresholds?.offDwell ?? 4,
     onDwell: opts.thresholds?.onDwell ?? 3,
     calibFrames: opts.thresholds?.calibFrames ?? 45,
   }

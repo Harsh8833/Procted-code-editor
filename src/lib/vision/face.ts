@@ -13,26 +13,31 @@ async function loadBlazeFace() {
 }
 
 function isValidBox(
-  box: { x: number; y: number; width: number; height: number },
-  vw: number,
-  vh: number
+	box: { x: number; y: number; width: number; height: number },
+	vw: number,
+	vh: number
 ): boolean {
-  // Reject degenerate boxes
-  if (box.width <= 0 || box.height <= 0 || vw <= 0 || vh <= 0) return false
-  // Require the face box to be fully inside the frame with a margin, so partial (e.g., only forehead) is ignored
-  const mx = Math.max(6, Math.floor(vw * 0.06))
-  const my = Math.max(6, Math.floor(vh * 0.06))
-  if (box.x < mx || box.y < my) return false
-  if (box.x + box.width > vw - mx || box.y + box.height > vh - my) return false
-  // Size constraints: too tiny or too huge likely noise or too close
-  const area = box.width * box.height
-  const frameArea = vw * vh
-  const areaRatio = area / frameArea
-  if (areaRatio < 0.04 || areaRatio > 0.65) return false
-  // Aspect ratio of face bbox should be reasonable
-  const ar = box.width / box.height
-  if (ar < 0.6 || ar > 1.6) return false
-  return true
+	// Reject degenerate boxes
+	if (box.width <= 0 || box.height <= 0 || vw <= 0 || vh <= 0) return false
+	// Require the face box to be fully inside the frame with a generous margin so partial faces are rejected
+	// Slightly stricter than before to ensure "full face" is well within bounds
+	const mx = Math.max(12, Math.floor(vw * 0.08))
+	const my = Math.max(12, Math.floor(vh * 0.08))
+	if (box.x < mx || box.y < my) return false
+	if (box.x + box.width > vw - mx || box.y + box.height > vh - my) return false
+	// Size constraints: too tiny => far away/partial; too huge => too close/cropped
+	const area = box.width * box.height
+	const frameArea = vw * vh
+	const areaRatio = area / frameArea
+	if (areaRatio < 0.08 || areaRatio > 0.55) return false
+	// Also enforce width/height occupancy bands for stability
+	const wRatio = box.width / vw
+	const hRatio = box.height / vh
+	if (wRatio < 0.18 || hRatio < 0.18) return false
+	// Aspect ratio of face bbox should be reasonable
+	const ar = box.width / box.height
+	if (ar < 0.7 || ar > 1.5) return false
+	return true
 }
 
 export async function detectFace(videoEl: HTMLVideoElement): Promise<{ present: boolean; confidence: number }> {

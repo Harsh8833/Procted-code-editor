@@ -217,7 +217,7 @@ export function Prechecks({ onComplete, onError }: PrechecksProps) {
 				setStepStatus('face', 'passed')
 				return true
 			}
-			throw new Error('No face detected. Please align your face within the frame and retry.')
+			throw new Error('No face detected. Please ensure your full face is entirely within the camera frame and retry.')
 		} catch (err: any) {
 			const msg = err?.message || 'Face detection failed'
 			setErrorsByStep((p) => ({ ...p, face: msg }))
