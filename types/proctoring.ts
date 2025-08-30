@@ -71,6 +71,7 @@ export interface CodingQuestion {
   }>
   difficulty: "easy" | "medium" | "hard"
   timeLimit?: number
+  templates?: Partial<Record<'javascript' | 'python' | 'java' | 'cpp', string>>
 }
 
 export interface SessionData {
