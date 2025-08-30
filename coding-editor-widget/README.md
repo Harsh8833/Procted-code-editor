@@ -25,12 +25,12 @@ export default function App() {
 ## Develop
 
 ```sh
-pnpm i
-pnpm -w --filter ./coding-editor-widget dev
+npm install
+npm run dev
 ```
 
 ## Build
 
 ```sh
-pnpm -w --filter ./coding-editor-widget build
+npm run build
 ```
