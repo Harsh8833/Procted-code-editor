@@ -2,13 +2,39 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Run Next.js development server",
+			"label": "Build the library",
 			"type": "shell",
-			"command": "pnpm dev",
-			"isBackground": true,
-			"problemMatcher": [
-				"$tsc"
-			],
+			"command": "npm run build",
+			"group": "build"
+		},
+		{
+			"label": "Build the library",
+			"type": "shell",
+			"command": "npm run -s build",
+			"group": "build"
+		},
+		{
+			"label": "Build the library",
+			"type": "shell",
+			"command": "npm run -s build",
+			"group": "build"
+		},
+		{
+			"label": "Build the library",
+			"type": "shell",
+			"command": "npm run -s build",
+			"group": "build"
+		},
+		{
+			"label": "Build the library",
+			"type": "shell",
+			"command": "npm run -s build",
+			"group": "build"
+		},
+		{
+			"label": "Build the library",
+			"type": "shell",
+			"command": "npm run -s build",
 			"group": "build"
 		}
 	]
