@@ -10,6 +10,9 @@ const LANGUAGE_ID_MAP: Record<Judge0LanguageKey, number> = {
 const RAPIDAPI_KEY = import.meta.env.VITE_JUDGE0_RAPIDAPI_KEY as string | undefined
 const RAPIDAPI_HOST = (import.meta.env.VITE_JUDGE0_RAPIDAPI_HOST as string | undefined) || 'judge0-ce.p.rapidapi.com'
 const PROXY_BASE = import.meta.env.VITE_JUDGE0_PROXY_URL as string | undefined
+// Optional auth for self-hosted Judge0 (configured via judge0.conf AUTHZ_* options)
+const AUTH_HEADER_NAME = (import.meta.env.VITE_JUDGE0_AUTH_HEADER_NAME as string | undefined) || 'X-Auth-User'
+const AUTH_TOKEN = import.meta.env.VITE_JUDGE0_AUTH_TOKEN as string | undefined
 
 function requireEnv() {
   if (!PROXY_BASE && !RAPIDAPI_KEY) throw new Error('Missing VITE_JUDGE0_RAPIDAPI_KEY or VITE_JUDGE0_PROXY_URL')
@@ -18,9 +21,16 @@ function requireEnv() {
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   requireEnv()
   const url = PROXY_BASE ? `${PROXY_BASE}${path}` : `https://${RAPIDAPI_HOST}${path}`
-  const headers = PROXY_BASE
-    ? { 'Content-Type': 'application/json', ...(init?.headers || {}) }
-    : { 'Content-Type': 'application/json', 'x-rapidapi-key': RAPIDAPI_KEY!, 'x-rapidapi-host': RAPIDAPI_HOST, ...(init?.headers || {}) }
+  // Build headers depending on hosting mode
+  let headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (PROXY_BASE) {
+    if (AUTH_TOKEN) headers[AUTH_HEADER_NAME] = AUTH_TOKEN
+  } else {
+    headers['x-rapidapi-key'] = RAPIDAPI_KEY!
+    headers['x-rapidapi-host'] = RAPIDAPI_HOST
+  }
+  // Merge any caller-provided headers last
+  headers = { ...headers, ...(init?.headers as Record<string, string> | undefined) }
   const res = await fetch(url, { ...init, headers })
   if (!res.ok) {
     const text = await res.text().catch(() => '')

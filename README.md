@@ -34,3 +34,9 @@ npm run dev
 ```sh
 npm run build
 ```
+
+## Judge0 backend (local or server)
+
+- For a self-hosted Judge0 and API key/auth setup, see `ENVIRONMENT.md`.
+- Copy `.env.example` to `.env.local` and set variables for either RapidAPI or your self-hosted URL.
+ - Full backend documentation: `docs/BACKEND.md`.
